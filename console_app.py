@@ -23,10 +23,6 @@ def print_menu():
     """Print main menu"""
     print("📋 MAIN MENU:")
     print("1. Say Hello")
-    print("2. Show Current Time")
-    print("3. Show System Information")
-    print("4. Simple Calculator")
-    print("5. Text Reverser")
     print("6. Exit")
     print("-" * 40)
 
