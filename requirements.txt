@@ -1,2 +1,5 @@
-# Requirements for Simple Python Application
+# Requirements for AI Automation Application with Nova Act
+nova-act
 pyinstaller>=6.0.0
+python-dotenv
+pydantic>=2.0.0

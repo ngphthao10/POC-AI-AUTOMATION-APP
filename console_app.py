@@ -13,26 +13,33 @@ def clear_screen():
 
 def print_header():
     """Print application header"""
-    print("=" * 50)
-    print("    🤖 AI AUTOMATION APPLICATION 🤖")
-    print("=" * 50)
+    print("=" * 60)
+    print("    🐍 AI AUTOMATION APPLICATION 🐍")
+    print("    Console-based Utilities")
+    print("=" * 60)
     print()
 
 def print_menu():
     """Print main menu"""
-    print("📋 MENU:")
+    print("📋 MAIN MENU:")
+    print("1. Say Hello")
+    print("2. Show Current Time")
+    print("3. Show System Information")
+    print("4. Simple Calculator")
+    print("5. Text Reverser")
     print("6. Exit")
-    print("-" * 30)
-    """Reverse text function"""
-    print("\n🔄 TEXT REVERSER")
-    print("-" * 20)
-    text = input("Enter text to reverse: ")
-    if text:
-        reversed_text = text[::-1]
-        print(f"\nOriginal: {text}")
-        print(f"Reversed: {reversed_text}")
+    print("-" * 40)
+
+def say_hello():
+    """Say hello function"""
+    print("\n👋 HELLO!")
+    print("-" * 10)
+    name = input("What's your name? ").strip()
+    if name:
+        print(f"\nHello, {name}! Welcome to the Simple Python Application!")
+        print("This app includes various console utilities for your convenience.")
     else:
-        print("No text entered!")
+        print("\nHello there! Thanks for using our simple console app!")
     input("\nPress Enter to continue...")
 
 def main():
@@ -46,7 +53,7 @@ def main():
             choice = input("Choose an option (1-6): ").strip()
             
             if choice == '1':
-                print("\n👋 Hi! Thanks for using the app!")
+                say_hello()
             elif choice == '6':
                 print("\n👋 Goodbye! Thanks for using the app!")
                 break

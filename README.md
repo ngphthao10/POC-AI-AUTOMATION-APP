@@ -1,16 +1,10 @@
-# Simple Python Application
+# Simple Python Console Application
 
 Một ứng dụng Python đơn giản với giao diện console tương tác.
 
 ## 📋 Tính năng
 
-- ✅ Giao diện console đơn giản và thân thiện
-- 👋 Chào hỏi người dùng
-- ⏰ Hiển thị thời gian hiện tại
-- 💻 Xem thông tin hệ thống
-- 🔢 Máy tính đơn giản
-- 🔄 Đảo ngược văn bản
-- 📦 Có thể đóng gói thành file thực thi
+- WIP
 
 ## 🚀 Cách chạy
 
@@ -74,7 +68,7 @@ pyinstaller --onefile --name="ai_automation_app" console_app.py
 ## 📂 Cấu trúc thư mục sau khi build
 
 ``` txt
-simple_python_app/
+simple_python_console_app/
 ├── console_app.py          # Ứng dụng chính
 ├── requirements.txt        # Dependencies
 ├── README.md              # Hướng dẫn này
