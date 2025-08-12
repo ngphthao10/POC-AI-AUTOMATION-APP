@@ -39,13 +39,13 @@ build.bat
 
 #### Thủ công
 
-**Bước 1: Tạo virtual environment**
+#### Bước 1: Tạo virtual environment
 
 ```bash
 python3 -m venv venv
 ```
 
-**Bước 2: Kích hoạt virtual environment**
+#### Bước 2: Kích hoạt virtual environment
 
 macOS/Linux:
 
@@ -59,13 +59,13 @@ Windows:
 venv\Scripts\activate.bat
 ```
 
-**Bước 3: Cài đặt PyInstaller**
+#### Bước 3: Cài đặt PyInstaller
 
 ```bash
 pip install pyinstaller
 ```
 
-**Bước 4: Tạo file thực thi**
+#### Bước 4: Tạo file thực thi
 
 ```bash
 pyinstaller --onefile --name="ai_automation_app" console_app.py
@@ -73,7 +73,7 @@ pyinstaller --onefile --name="ai_automation_app" console_app.py
 
 ## 📂 Cấu trúc thư mục sau khi build
 
-```
+``` txt
 simple_python_app/
 ├── console_app.py          # Ứng dụng chính
 ├── requirements.txt        # Dependencies
