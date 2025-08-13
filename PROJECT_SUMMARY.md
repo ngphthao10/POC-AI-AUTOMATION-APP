@@ -3,7 +3,7 @@
 ## ✅ Đã hoàn thành
 
 ✅ **Ứng dụng Python Console**: `console_app.py`  
-✅ **File thực thi độc lập**: `dist/ai_automation_app` (7.6MB)  
+✅ **File thực thi độc lập**: `dist/ai_automation_app`
 ✅ **Script build tự động**: `build.sh` (macOS/Linux) và `build.bat` (Windows)  
 ✅ **Virtual environment**: `venv/`  
 ✅ **Documentation đầy đủ**: `README.md`, `DEMO.md`  
@@ -11,7 +11,7 @@
 
 ## 🗂️ Cấu trúc Project
 
-```
+``` text
 simple_python_app/
 ├── console_app.py          # 🐍 Ứng dụng Python chính
 ├── requirements.txt        # 📦 Dependencies
@@ -27,31 +27,30 @@ simple_python_app/
 └── ai_automation_app.spec  # ⚙️ PyInstaller config
 ```
 
-## 🎯 Tính năng
+## 🎯 Tính năng WIP
 
 | #  | Tính năng       | Mô tả                           |
 |----|----------------|---------------------------------|
 | 1  | Say Hello      | Chào hỏi cá nhân hóa            |
-| 2  | Show Time      | Hiển thị ngày giờ hiện tại      |
-| 3  | System Info    | Thông tin hệ thống chi tiết     |
-| 4  | Calculator     | Máy tính cơ bản (+,-,*,/)      |
-| 5  | Text Reverser  | Đảo ngược chuỗi văn bản         |
 | 6  | Exit           | Thoát ứng dụng                  |
 
 ## 🚀 Cách sử dụng
 
-### Chạy source code:
+### Chạy source code
+
 ```bash
 python3 console_app.py
 ```
 
-### Build thành executable:
+### Build thành executable
+
 ```bash
 ./build.sh        # macOS/Linux
 build.bat         # Windows  
 ```
 
-### Chạy executable:
+### Chạy executable
+
 ```bash
 ./dist/ai_automation_app
 ```
@@ -70,12 +69,4 @@ build.bat         # Windows
 ✅ **Đóng gói thành file thực thi độc lập với PyInstaller**  
 ✅ **Không cần cài Python để chạy file executable**  
 ✅ **Hỗ trợ cross-platform building**  
-✅ **Documentation và hướng dẫn đầy đủ**  
-
----
-
-🎯 **Project này là ví dụ hoàn hảo cho việc:**
-- Học Python development
-- Học packaging với PyInstaller  
-- Tạo desktop applications đơn giản
-- Phân phối software không cần runtime dependencies
+✅ **Documentation và hướng dẫn đầy đủ**
