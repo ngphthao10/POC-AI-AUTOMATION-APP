@@ -8,7 +8,8 @@
     {
       "target_user": "thuy.lethu4",
       "new_role": "CSP_BTS_CARD",
-      "new_branch": "002"
+      "new_branch": "002",
+      "branch_hierarchy": ["VIB Bank", "North", "002_HA NOI"]
     }
   ]
 }

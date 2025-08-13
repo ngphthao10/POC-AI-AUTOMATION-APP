@@ -2,10 +2,11 @@
 CSP Admin Change Role and Branch Automation
 
 This automation handles the process of changing user roles and branch assignments 
-in CSP web applications for IT support teams.
+in CSP web applications for IT support teams. It supports both simple branch changes
+and hierarchical branch navigation.
 
 Usage:
-python -m nova_act.samples.vib_csp_automation.csp_admin_change_role_and_branch --input_file input.json [--per_user_session False] [--parallel_workers 4]
+python -m src.csp.csp_admin_change_role_and_branch --input_file src/csp/input.json [--per_user_session False] [--parallel_workers 4]
 
 Note: per_user_session defaults to True (isolation ON). Pass --per_user_session False to reuse a single browser session.
 
@@ -25,10 +26,18 @@ Input JSON format:
         {
             "target_user": "user2@example.com", 
             "new_role": "employee",
-            "new_branch": "branch_002"
+            "new_branch": "branch_002",
+            "branch_hierarchy": ["VIB Bank", "North", "002_HA NOI"]
         }
     ]
 }
+
+Branch Hierarchy Support:
+- If 'branch_hierarchy' is provided, the automation will navigate through the hierarchical path step by step
+- Each element in the array represents a level in the hierarchy (e.g., Bank → Region → Branch)
+- The final element in the hierarchy is considered the target branch
+- If 'branch_hierarchy' is provided, 'new_branch' can be omitted or will be ignored
+- This supports complex organizational structures where branches are nested under regions or departments
 """
 
 import getpass
@@ -56,6 +65,7 @@ class UserChangeRequest(BaseModel):
     target_user: str
     new_role: Optional[str] = None
     new_branch: Optional[str] = None
+    branch_hierarchy: Optional[List[str]] = None
 
 
 class InputConfig(BaseModel):
@@ -259,6 +269,100 @@ class CSPAdminRoleAndBranchChanger:
         self.session_data['last_role_change_performed'] = False
         return False
     
+    def change_user_branch_hierarchical(self, nova: NovaAct, branch_hierarchy: List[str], auto_save: bool = True) -> bool:
+        """Change user branch using hierarchical navigation through branch_hierarchy.
+        
+        Args:
+            nova: NovaAct instance
+            branch_hierarchy: List of hierarchical levels to navigate (e.g., ["VIB Bank", "North", "002_HA NOI"])
+            auto_save: Whether to automatically save changes after selection
+            
+        Returns:
+            bool: True if branch was successfully changed, False otherwise
+        """
+        if not branch_hierarchy or len(branch_hierarchy) == 0:
+            print("❌ Empty branch hierarchy provided")
+            return False
+            
+        final_branch = branch_hierarchy[-1]  # Last element is the target branch
+        print(f"🏢 Changing user branch using hierarchical path: {' → '.join(branch_hierarchy)}")
+        
+        # Always ensure Roles tab active first (explicit, idempotent)
+        nova.act("Click (or re-click) the 'Roles' tab in the Edit user modal to ensure it is active before inspecting scope inputs")
+        
+        # Composite pre-check without opening panel - check if final branch already present
+        pre_token = nova.act(
+            f"Just read the current Scope textbox (no clicks) and return True if it already CONTAINS '{final_branch}' (substring acceptable).", 
+            schema=BOOL_SCHEMA
+        )
+        if pre_token.matches_schema and pre_token.parsed_response:
+            print(f"ℹ️ Branch already contains target token '{final_branch}'; skipping")
+            self.session_data['last_branch_change_performed'] = False
+            return True
+        
+        # Step 1: Open scope selector panel
+        print("🔍 Opening scope selection panel...")
+        nova.act("Ensure 'Roles' tab is active, then click the FIRST non-empty scope input (not the empty placeholder) to open the scope selection panel")
+        time.sleep(1)
+        
+        # Step 2: Navigate through hierarchy levels
+        for i, level in enumerate(branch_hierarchy):
+            print(f"📍 Navigating to level {i+1}/{len(branch_hierarchy)}: '{level}'")
+            
+            if i == 0:
+                # First level: click on the leftmost column
+                nova.act("In the scope selection panel, click on the first selectable item in the leftmost column to focus it")
+                time.sleep(0.5)
+                
+            # Search for the current level in the appropriate column
+            if i < len(branch_hierarchy) - 1:
+                # Not the final level - navigate through hierarchy
+                nova.act(f"In the scope selection panel, look for an item labeled '{level}' and click on it to expand/navigate to the next level")
+                time.sleep(1)
+            else:
+                # Final level - search and select the target branch
+                print(f"🎯 Selecting final branch: '{level}'")
+                nova.act(f"Focus the rightmost column search input with placeholder 'Search ...' and replace text with '{level}'")
+                time.sleep(1)
+                nova.act(f"In the filtered results, find the row whose label exactly equals '{level}' (case-insensitive) and ensure its checkbox is checked")
+                time.sleep(0.5)
+        
+        # Step 3: Apply selection
+        print("💾 Applying branch selection...")
+        nova.act("Click the purple Select button to apply the branch selection")
+        time.sleep(1)
+        
+        if auto_save:
+            # Post-action verify + save combined
+            verify_and_save = nova.act(
+                f"Without reopening the selector, confirm the Scope textbox now CONTAINS '{final_branch}'. If yes, click the green Save button, wait for success indication (modal closes or success toast/message). Return True only if token present and success message or close observed.",
+                schema=BOOL_SCHEMA
+            )
+            if verify_and_save.matches_schema and verify_and_save.parsed_response:
+                print(f"✅ Hierarchical scope updated & saved for branch: {final_branch}")
+                self.session_data['last_branch_change_performed'] = True
+                self.session_data['branch_saved'] = True
+                return True
+            print(f"❌ Failed to update/save hierarchical branch: {final_branch}")
+            self.session_data['last_branch_change_performed'] = False
+            self.session_data['branch_saved'] = False
+            return False
+        else:
+            # Verify only (no save)
+            verify_only = nova.act(
+                f"Without reopening the selector, confirm the Scope textbox now CONTAINS '{final_branch}'. Return True if token present (do NOT click Save).",
+                schema=BOOL_SCHEMA
+            )
+            if verify_only.matches_schema and verify_only.parsed_response:
+                print(f"✅ Hierarchical scope updated (pending save) for branch: {final_branch}")
+                self.session_data['last_branch_change_performed'] = True
+                self.session_data['branch_saved'] = False
+                return True
+            print(f"❌ Failed to update hierarchical branch (no save path): {final_branch}")
+            self.session_data['last_branch_change_performed'] = False
+            self.session_data['branch_saved'] = False
+            return False
+
     def change_user_branch(self, nova: NovaAct, new_branch: str, auto_save: bool = True) -> bool:
         """Change user branch using the Scope control.
 
@@ -384,6 +488,7 @@ class CSPAdminRoleAndBranchChanger:
         - If both role & branch requested: change role, change branch (no auto save), then one save.
         - If only branch: branch auto_save True (internal save) unless no change.
         - If only role: change role then save if changed.
+        - If branch_hierarchy is provided, use hierarchical navigation instead of simple branch change.
         """
         print(f"\n👤 Processing user: {user_request.target_user}")
         try:
@@ -398,9 +503,11 @@ class CSPAdminRoleAndBranchChanger:
                     timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
                 ))
                 return False
-            # Track
+            
+            # Track what changes are requested
             role_requested = bool(user_request.new_role)
-            branch_requested = bool(user_request.new_branch)
+            branch_requested = bool(user_request.new_branch) or bool(user_request.branch_hierarchy)
+            use_hierarchy = bool(user_request.branch_hierarchy)
 
             # Both role and branch (single save)
             if role_requested and branch_requested:
@@ -416,17 +523,25 @@ class CSPAdminRoleAndBranchChanger:
                     ))
                     return False
                 role_changed = self.session_data.get('last_role_change_performed', False)
-                if not self.change_user_branch(nova, user_request.new_branch, auto_save=False):
+                
+                # Use hierarchical or simple branch change
+                if use_hierarchy:
+                    branch_success = self.change_user_branch_hierarchical(nova, user_request.branch_hierarchy, auto_save=False)
+                else:
+                    branch_success = self.change_user_branch(nova, user_request.new_branch, auto_save=False)
+                
+                if not branch_success:
                     self.results.append(RoleChangeResult(
                         user_email=user_request.target_user,
                         old_role="unknown",
                         new_role=user_request.new_role or "unchanged",
                         old_branch="unknown",
-                        new_branch=user_request.new_branch,
+                        new_branch=user_request.new_branch or "unchanged",
                         status="failed - branch change failed",
                         timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
                     ))
                     return False
+                
                 branch_changed = self.session_data.get('last_branch_change_performed', False)
                 if role_changed or branch_changed:
                     if not self.save_changes(nova):
@@ -440,6 +555,7 @@ class CSPAdminRoleAndBranchChanger:
                             timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
                         ))
                         return False
+                        
             elif role_requested:
                 if not self.change_user_role(nova, user_request.new_role):
                     self.results.append(RoleChangeResult(
@@ -464,14 +580,21 @@ class CSPAdminRoleAndBranchChanger:
                             timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
                         ))
                         return False
+                        
             elif branch_requested:
-                if not self.change_user_branch(nova, user_request.new_branch, auto_save=True):
+                # Use hierarchical or simple branch change with auto_save=True
+                if use_hierarchy:
+                    branch_success = self.change_user_branch_hierarchical(nova, user_request.branch_hierarchy, auto_save=True)
+                else:
+                    branch_success = self.change_user_branch(nova, user_request.new_branch, auto_save=True)
+                
+                if not branch_success:
                     self.results.append(RoleChangeResult(
                         user_email=user_request.target_user,
                         old_role="unknown",
                         new_role=user_request.new_role or "unchanged",
                         old_branch="unknown",
-                        new_branch=user_request.new_branch,
+                        new_branch=user_request.new_branch or "unchanged",
                         status="failed - branch change failed",
                         timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
                     ))
@@ -480,12 +603,17 @@ class CSPAdminRoleAndBranchChanger:
             else:
                 print("ℹ️ No changes requested (neither role nor branch)")
 
+            # Determine the effective new branch for logging
+            effective_new_branch = user_request.new_branch or "unchanged"
+            if user_request.branch_hierarchy:
+                effective_new_branch = user_request.branch_hierarchy[-1]  # Use final level from hierarchy
+
             self.results.append(RoleChangeResult(
                 user_email=user_request.target_user,
                 old_role="unknown",
                 new_role=user_request.new_role or "unchanged",
                 old_branch="unknown",
-                new_branch=user_request.new_branch or "unchanged",
+                new_branch=effective_new_branch,
                 status="success",
                 timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
             ))
@@ -708,12 +836,13 @@ def create_sample_input_file(filename: str = "sample_input.json"):
             {
                 "target_user": "user2@example.com",
                 "new_role": "employee", 
-                "new_branch": "branch_002"
+                "new_branch": "branch_002",
+                "branch_hierarchy": ["VIB Bank", "North", "002_HA NOI"]
             },
             {
                 "target_user": "user3@example.com",
                 "new_role": "supervisor",
-                "new_branch": None
+                "branch_hierarchy": ["VIB Bank", "South", "005_HO CHI MINH"]
             }
         ]
     }
@@ -722,6 +851,7 @@ def create_sample_input_file(filename: str = "sample_input.json"):
         json.dump(sample_data, f, indent=2, ensure_ascii=False)
     
     print(f"📄 Sample input file created: {filename}")
+    print("💡 Note: Use 'branch_hierarchy' for hierarchical navigation or 'new_branch' for simple branch selection")
 
 
 def main(
