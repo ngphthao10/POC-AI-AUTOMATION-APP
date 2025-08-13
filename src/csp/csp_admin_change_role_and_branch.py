@@ -43,6 +43,7 @@ Branch Hierarchy Support:
 import getpass
 import time
 import json
+import fire
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from pathlib import Path
@@ -274,7 +275,7 @@ class CSPAdminRoleAndBranchChanger:
         
         Args:
             nova: NovaAct instance
-            branch_hierarchy: List of hierarchical levels to navigate (e.g., ["VIB Bank", "North", "002_HA NOI"])
+            branch_hierarchy: List of hierarchical levels to navigate (e.g., ["VIB Bank", "North", "003"])
             auto_save: Whether to automatically save changes after selection
             
         Returns:
@@ -303,34 +304,31 @@ class CSPAdminRoleAndBranchChanger:
         # Step 1: Open scope selector panel
         print("🔍 Opening scope selection panel...")
         nova.act("Ensure 'Roles' tab is active, then click the FIRST non-empty scope input (not the empty placeholder) to open the scope selection panel")
-        time.sleep(1)
         
-        # Step 2: Navigate through hierarchy levels
+        # Step 2: Navigate through hierarchy levels step by step
         for i, level in enumerate(branch_hierarchy):
             print(f"📍 Navigating to level {i+1}/{len(branch_hierarchy)}: '{level}'")
             
             if i == 0:
-                # First level: click on the leftmost column
-                nova.act("In the scope selection panel, click on the first selectable item in the leftmost column to focus it")
-                time.sleep(0.5)
-                
-            # Search for the current level in the appropriate column
-            if i < len(branch_hierarchy) - 1:
-                # Not the final level - navigate through hierarchy
-                nova.act(f"In the scope selection panel, look for an item labeled '{level}' and click on it to expand/navigate to the next level")
-                time.sleep(1)
+                # First level: Find and click on the bank level (VIB Bank)
+                print(f"🏦 Selecting bank level: '{level}'")
+                nova.act(f"In the leftmost column of the scope selection panel, find and click on the item labeled '{level}' to expand it")
+            elif i == 1:
+                # Second level: Find and click on the region level (North/South)
+                print(f"🌍 Selecting region level: '{level}'")
+                nova.act(f"In the middle column that appeared after selecting the bank, find and click on the item labeled '{level}' to expand it")
             else:
-                # Final level - search and select the target branch
+                # Final level: Find and select the specific branch
                 print(f"🎯 Selecting final branch: '{level}'")
-                nova.act(f"Focus the rightmost column search input with placeholder 'Search ...' and replace text with '{level}'")
-                time.sleep(1)
-                nova.act(f"In the filtered results, find the row whose label exactly equals '{level}' (case-insensitive) and ensure its checkbox is checked")
-                time.sleep(0.5)
+                # Use the search box in the rightmost column to find the specific branch
+                nova.act(f"In the rightmost column, use the search input field (with placeholder 'Search ...') and type '{level}' to filter the branches")
+                # Find and check the checkbox for the specific branch
+                nova.act(f"In the filtered results in the rightmost column, find the row that contains '{level}' and click its checkbox to select it")
         
         # Step 3: Apply selection
         print("💾 Applying branch selection...")
-        nova.act("Click the purple Select button to apply the branch selection")
-        time.sleep(1)
+        nova.act("Click the purple 'Select' button at the bottom of the scope selection panel to apply the branch selection")
+        time.sleep(2)
         
         if auto_save:
             # Post-action verify + save combined
