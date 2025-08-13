@@ -121,7 +121,7 @@ class CSPAdminRoleAndBranchChanger:
         results_data = {
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "total_users": len(self.results),
-            "successful": len([r for r in self.results if r.status == "success"]),
+            "successful": len([r for r in self.results if r.status.startswith("success")]),
             # treat any status beginning with 'failed' as failure (allows richer failure messages)
             "failed": len([r for r in self.results if r.status.startswith("failed")]),
             "results": [result.model_dump() for result in self.results]
@@ -248,23 +248,26 @@ class CSPAdminRoleAndBranchChanger:
             f"Check if the visible Role input currently shows '{new_role}' exactly (True if matches, False otherwise)",
             schema=BOOL_SCHEMA
         )
+        
+        # If role already matches, return early without any processing
+        if pre_match.matches_schema and pre_match.parsed_response:
+            print(f"ℹ️ Role already set to '{new_role}' - no change needed")
+            self.session_data['last_role_change_performed'] = False
+            return True
+        
         # Composite overwrite without selecting from dropdown suggestions
         nova.act(
-            f"If multiple role input fields are present, identify ONLY the one that already displays a non-empty value (current role). Click that populated field once to focus it. Do NOT click any second/duplicate/empty role field or placeholder. Without opening a dropdown or clicking any option, select all text in that focused populated field and replace it with '{new_role}', then blur (click a neutral area) to commit. Do NOT click any 'Select role' option or any list item."
+            f"If multiple role input fields are present, identify ONLY the one that already displays a non-empty value (current role). Click that populated field once to focus it. Do NOT click any second/duplicate/empty role field or placeholder. Without opening a dropdown or clicking any option, select all text in that focused populated field and replace it with '{new_role}', then blur (click a neutral area) to commit. Do NOT click any 'Select role' option or any list item. Do NOT click any Close button."
         )
+
         # Verify field text now shows desired value
         role_ok = nova.act(
             f"Confirm the role input now exactly shows '{new_role}' (case-insensitive match acceptable). Return True if so.",
             schema=BOOL_SCHEMA
         )
         if role_ok.matches_schema and role_ok.parsed_response:
-            # Mark change only if it did not previously match
-            changed = not (pre_match.matches_schema and pre_match.parsed_response)
-            self.session_data['last_role_change_performed'] = changed
-            if changed:
-                print(f"✅ Role updated to: {new_role}")
-            else:
-                print(f"ℹ️ Role already was '{new_role}' (no change needed, no option clicked)")
+            print(f"✅ Role updated to: {new_role}")
+            self.session_data['last_role_change_performed'] = True
             return True
         print(f"❌ Failed to set role to: {new_role} (post-verify mismatch)")
         self.session_data['last_role_change_performed'] = False
@@ -541,6 +544,8 @@ class CSPAdminRoleAndBranchChanger:
                     return False
                 
                 branch_changed = self.session_data.get('last_branch_change_performed', False)
+                
+                # Only save if there were actual changes
                 if role_changed or branch_changed:
                     if not self.save_changes(nova):
                         self.results.append(RoleChangeResult(
@@ -553,6 +558,10 @@ class CSPAdminRoleAndBranchChanger:
                             timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
                         ))
                         return False
+                else:
+                    print("ℹ️ No changes needed - role and branch already set correctly")
+                    # Close the edit modal since no changes were made
+                    nova.act("Close the edit modal by clicking Cancel, X button, or clicking outside the modal")
                         
             elif role_requested:
                 if not self.change_user_role(nova, user_request.new_role):
@@ -566,6 +575,8 @@ class CSPAdminRoleAndBranchChanger:
                         timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
                     ))
                     return False
+                
+                # Only save if there was an actual role change
                 if self.session_data.get('last_role_change_performed'):
                     if not self.save_changes(nova):
                         self.results.append(RoleChangeResult(
@@ -578,6 +589,8 @@ class CSPAdminRoleAndBranchChanger:
                             timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
                         ))
                         return False
+                else:
+                    print("ℹ️ No changes needed - role already set correctly")
                         
             elif branch_requested:
                 # Use hierarchical or simple branch change with auto_save=True
@@ -597,7 +610,11 @@ class CSPAdminRoleAndBranchChanger:
                         timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
                     ))
                     return False
-                # auto_save path already saved if changed
+                
+                # Check if a branch change was actually performed
+                branch_changed = self.session_data.get('last_branch_change_performed', False)
+                if not branch_changed:
+                    print("ℹ️ No changes needed - branch already set correctly")
             else:
                 print("ℹ️ No changes requested (neither role nor branch)")
 
@@ -606,16 +623,43 @@ class CSPAdminRoleAndBranchChanger:
             if user_request.branch_hierarchy:
                 effective_new_branch = user_request.branch_hierarchy[-1]  # Use final level from hierarchy
 
+            # Determine if any changes were actually made
+            role_changed = self.session_data.get('last_role_change_performed', False)
+            branch_changed = self.session_data.get('last_branch_change_performed', False)
+            
+            # Create appropriate status message
+            if role_requested and branch_requested:
+                if role_changed and branch_changed:
+                    status = "success - both role and branch updated"
+                elif role_changed:
+                    status = "success - role updated, branch already correct"
+                elif branch_changed:
+                    status = "success - branch updated, role already correct"
+                else:
+                    status = "success - no changes needed, already configured correctly"
+            elif role_requested:
+                if role_changed:
+                    status = "success - role updated"
+                else:
+                    status = "success - role already correct"
+            elif branch_requested:
+                if branch_changed:
+                    status = "success - branch updated"
+                else:
+                    status = "success - branch already correct"
+            else:
+                status = "success - no changes requested"
+
             self.results.append(RoleChangeResult(
                 user_email=user_request.target_user,
                 old_role="unknown",
                 new_role=user_request.new_role or "unchanged",
                 old_branch="unknown",
                 new_branch=effective_new_branch,
-                status="success",
+                status=status,
                 timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
             ))
-            print(f"✅ Successfully processed {user_request.target_user}")
+            print(f"✅ Successfully processed {user_request.target_user}: {status}")
             return True
 
         except Exception as e:
@@ -715,7 +759,7 @@ class CSPAdminRoleAndBranchChanger:
                     result_obj = future.result()
                     with lock:
                         self.results.append(result_obj)
-                        if result_obj.status == "success":
+                        if result_obj.status.startswith("success"):
                             success_count += 1
             total_users = len(config.users)
             print(f"\n📊 Parallel Batch Summary:")
