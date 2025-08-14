@@ -40,11 +40,21 @@ fi
 
 # Build the application
 echo "🔨 Building executable..."
-pyinstaller --onefile --name="ai_automation_app" console_app.py
+pyinstaller ai_automation_app.spec
 
 # Check if build was successful
 if [ $? -eq 0 ]; then
     echo "✅ Build successful!"
+    
+    # Copy input.json to dist directory
+    echo "📋 Copying input.json to distribution directory..."
+    if [ -f "src/csp/input.json" ]; then
+        cp "src/csp/input.json" "dist/"
+        echo "✅ input.json copied successfully"
+    else
+        echo "⚠️  input.json not found in src/csp/ - you can add it later"
+    fi
+    
     echo "📁 Executable file location:"
     ls -la dist/
     echo ""
@@ -59,7 +69,7 @@ if [ $? -eq 0 ]; then
     
     echo ""
     echo "📦 File size: $(du -h dist/ai_automation_app | cut -f1)"
-    echo "💡 Tip: You can copy this file to any computer and run it without Python installed!"
+    echo "💡 Tip: You can copy this file and input.json to any computer and run it without Python installed!"
 else
     echo "❌ Build failed!"
     exit 1

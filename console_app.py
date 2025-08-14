@@ -9,6 +9,21 @@ import os
 import json
 from pathlib import Path
 
+def get_application_path():
+    """Get the directory where the application is running from"""
+    if getattr(sys, 'frozen', False):
+        # Running as PyInstaller bundle
+        application_path = os.path.dirname(sys.executable)
+    else:
+        # Running as script
+        application_path = os.path.dirname(os.path.abspath(__file__))
+    return application_path
+
+def get_input_file_path():
+    """Get the path to the input.json file"""
+    app_path = get_application_path()
+    return os.path.join(app_path, "input.json")
+
 def clear_screen():
     """Clear the console screen"""
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -53,9 +68,10 @@ def csp_admin_change_role_and_branch():
     print("• Support for hierarchical branch navigation")
     print("• Batch processing from JSON input files")
     
-    print("\n📂 Available input file: src/csp/input.json")
+    input_file_path = get_input_file_path()
+    print(f"\n📂 Expected input file: {input_file_path}")
     print("\nTo run the full automation:")
-    print("python -m src.csp.csp_admin_change_role_and_branch --input_file src/csp/input.json")
+    print(f"Ensure input.json is in the same directory as the executable")
     
     print("\n⚠️  Important Notes:")
     print("• Requires valid admin credentials in the input file")
@@ -113,7 +129,7 @@ def show_sample_input_format():
 def show_current_input_file():
     """Show current input file contents"""
     try:
-        input_path = "src/csp/input.json"
+        input_path = get_input_file_path()
         if os.path.exists(input_path):
             print(f"\n📄 CURRENT INPUT FILE: {input_path}")
             print("-" * 40)
@@ -122,6 +138,8 @@ def show_current_input_file():
                 print(content)
         else:
             print(f"\n❌ Input file not found: {input_path}")
+            print(f"📁 Application directory: {get_application_path()}")
+            print("💡 Please place input.json in the same directory as the executable")
     except Exception as e:
         print(f"\n❌ Error reading input file: {e}")
     input("\nPress Enter to continue...")
@@ -132,10 +150,14 @@ def demo_automation_run():
     print("-" * 35)
     
     # Check if input file exists
-    input_path = "src/csp/input.json"
+    input_path = get_input_file_path()
     if not os.path.exists(input_path):
         print(f"❌ Input file not found: {input_path}")
-        print("Please ensure the input file exists with proper configuration.")
+        print(f"📁 Application directory: {get_application_path()}")
+        print("💡 Please ensure input.json is in the same directory as the executable.")
+        print("\n📝 You can:")
+        print("   1. Copy the input.json file to the application directory")
+        print("   2. Create a new input.json file with your configuration")
         input("\nPress Enter to continue...")
         return
     

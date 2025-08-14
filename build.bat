@@ -42,18 +42,28 @@ if exist "dist" (
 
 REM Build the application
 echo 🔨 Building executable...
-pyinstaller --onefile --name="ai_automation_app" console_app.py
+pyinstaller ai_automation_app.spec
 
 REM Check if build was successful
 if errorlevel 0 (
     echo ✅ Build successful!
+    
+    REM Copy input.json to dist directory
+    echo 📋 Copying input.json to distribution directory...
+    if exist "src\csp\input.json" (
+        copy "src\csp\input.json" "dist\"
+        echo ✅ input.json copied successfully
+    ) else (
+        echo ⚠️  input.json not found in src\csp\ - you can add it later
+    )
+    
     echo 📁 Executable file location:
     dir dist\
     echo.
     echo 🎉 You can now run your application:
     echo    dist\ai_automation_app.exe
     echo.
-    echo 💡 Tip: You can copy this file to any Windows computer and run it without Python installed!
+    echo 💡 Tip: You can copy this file and input.json to any Windows computer and run it without Python installed!
 ) else (
     echo ❌ Build failed!
     pause
