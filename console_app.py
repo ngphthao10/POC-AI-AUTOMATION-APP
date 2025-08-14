@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-AI Automation Application
-A console-based automation application with various utilities
+Ứng dụng Tự động hóa AI
+Ứng dụng tự động hóa dựa trên console với nhiều tiện ích khác nhau
 """
 
 import sys
@@ -10,297 +10,242 @@ import json
 from pathlib import Path
 
 def get_application_path():
-    """Get the directory where the application is running from"""
+    """Lấy thư mục nơi ứng dụng đang chạy"""
     if getattr(sys, 'frozen', False):
-        # Running as PyInstaller bundle
+        # Chạy như PyInstaller bundle
         application_path = os.path.dirname(sys.executable)
     else:
-        # Running as script
+        # Chạy như script
         application_path = os.path.dirname(os.path.abspath(__file__))
     return application_path
 
 def get_input_file_path():
-    """Get the path to the input.json file"""
+    """Lấy đường dẫn đến file input.json"""
     app_path = get_application_path()
     return os.path.join(app_path, "input.json")
 
 def clear_screen():
-    """Clear the console screen"""
+    """Xóa màn hình console"""
     os.system('cls' if os.name == 'nt' else 'clear')
 
 def print_header():
-    """Print application header"""
+    """In header của ứng dụng"""
     print("=" * 60)
-    print("    🐍 AI AUTOMATION APPLICATION 🐍")
-    print("    Console-based Utilities")
+    print("    🐍 ỨNG DỤNG TỰ ĐỘNG HÓA AI 🐍")
+    print("    Tiện ích dựa trên Console")
     print("=" * 60)
     print()
 
 def print_menu():
-    """Print main menu"""
-    print("📋 MAIN MENU:")
-    print("1. Say Hello")
-    print("2. CSP Admin - Change Role and Branch")
-    print("6. Exit")
+    """In menu chính"""
+    print("📋 MENU CHÍNH:")
+    print("1. CSP Admin - Thay đổi vai trò và chi nhánh")
+    print("6. Thoát")
     print("-" * 40)
 
-def say_hello():
-    """Say hello function"""
-    print("\n👋 HELLO!")
-    print("-" * 10)
-    name = input("What's your name? ").strip()
-    if name:
-        print(f"\nHello, {name}! Welcome to the Simple Python Application!")
-        print("This app includes various console utilities for your convenience.")
-    else:
-        print("\nHello there! Thanks for using our simple console app!")
-    input("\nPress Enter to continue...")
-
 def csp_admin_change_role_and_branch():
-    """CSP Admin - Change Role and Branch functionality"""
-    print("\n🏢 CSP ADMIN - CHANGE ROLE AND BRANCH")
+    """Chức năng CSP Admin - Thay đổi vai trò và chi nhánh"""
+    print("\n🏢 CSP ADMIN - THAY ĐỔI VAI TRÒ VÀ CHI NHÁNH")
     print("=" * 45)
-    print("This feature allows you to change user roles and branches in the CSP system.")
-    print("\nNote: This runs the actual automation with browser control.")
-    print("\nFeatures:")
-    print("• Change user roles (CSP-RB-TELLER, CSP_Inquiry, etc.)")
-    print("• Update branch assignments")
-    print("• Support for hierarchical branch navigation")
-    print("• Batch processing from JSON input files")
+    print("Tự động hóa thay đổi vai trò và chi nhánh người dùng CSP")
     
     input_file_path = get_input_file_path()
-    print(f"\n📂 Expected input file: {input_file_path}")
-    print("\nTo run the full automation:")
-    print(f"Ensure input.json is in the same directory as the executable")
-    
-    print("\n⚠️  Important Notes:")
-    print("• Requires valid admin credentials in the input file")
-    print("• Uses browser automation (NovaAct) for web interactions")
-    print("• Uses isolated browser sessions for reliability")
-    print("• Results are saved to timestamped JSON files")
+    print(f"📂 File đầu vào: {input_file_path}")
     
     while True:
-        print("\n📋 CSP Admin Options:")
-        print("1. View sample input format")
-        print("2. View current input file")
-        print("3. Run CSP automation")
-        print("4. Back to main menu")
+        print("\n📋 Menu CSP Admin:")
+        print("1. 🚀 Chạy tự động hóa CSP")
+        print("2. 📄 Xem file đầu vào")
+        print("3. 📝 Xem định dạng mẫu")
+        print("4. ← Quay lại menu chính")
         
-        choice = input("\nChoose an option (1-4): ").strip()
+        choice = input("\nChọn tùy chọn (1-4): ").strip()
         
         if choice == '1':
-            show_sample_input_format()
+            demo_automation_run()
         elif choice == '2':
             show_current_input_file()
         elif choice == '3':
-            demo_automation_run()
+            show_sample_input_format()
         elif choice == '4':
             break
         else:
-            print("❌ Invalid choice! Please try again.")
-            input("Press Enter to continue...")
+            print("❌ Lựa chọn không hợp lệ! Vui lòng thử lại.")
+            input("Nhấn Enter để tiếp tục...")
 
 def show_sample_input_format():
-    """Show sample input format for CSP automation"""
-    print("\n📄 SAMPLE INPUT FORMAT:")
+    """Hiển thị định dạng đầu vào mẫu cho tự động hóa CSP"""
+    print("\n📄 ĐỊNH DẠNG ĐẦU VÀO MẪU")
     print("-" * 30)
     sample = '''{
   "admin_credentials": {
-    "username": "your_admin_username",
-    "password": "your_admin_password",
-    "csp_admin_url": "https://your-csp-portal.com/portal/users/list"
+    "username": "admin_username",
+    "password": "admin_password",
+    "csp_admin_url": "https://csp-portal.com/portal/users/list"
   },
   "users": [
     {
       "target_user": "user1@example.com",
       "new_role": "CSP-RB-TELLER",
-      "new_branch": "002"
+      "branch_hierarchy": ["VIB Bank", "North", "002"]
     },
     {
-      "target_user": "user2@example.com",
+      "target_user": "user2@example.com", 
       "new_role": "CSP_Inquiry",
       "branch_hierarchy": ["VIB Bank", "North", "003"]
     }
   ]
 }'''
     print(sample)
-    input("\nPress Enter to continue...")
+    input("\nNhấn Enter để tiếp tục...")
 
 def show_current_input_file():
-    """Show current input file contents"""
+    """Hiển thị nội dung file đầu vào hiện tại"""
     try:
         input_path = get_input_file_path()
         if os.path.exists(input_path):
-            print(f"\n📄 CURRENT INPUT FILE: {input_path}")
+            print(f"\n📄 FILE ĐẦU VÀO: {input_path}")
             print("-" * 40)
             with open(input_path, 'r', encoding='utf-8') as f:
                 content = f.read()
                 print(content)
         else:
-            print(f"\n❌ Input file not found: {input_path}")
-            print(f"📁 Application directory: {get_application_path()}")
-            print("💡 Please place input.json in the same directory as the executable")
+            print(f"\n❌ Không tìm thấy file: {input_path}")
+            print("💡 Đặt input.json cùng thư mục với file thực thi")
     except Exception as e:
-        print(f"\n❌ Error reading input file: {e}")
-    input("\nPress Enter to continue...")
+        print(f"\n❌ Lỗi đọc file: {e}")
+    input("\nNhấn Enter để tiếp tục...")
 
 def demo_automation_run():
-    """Run actual CSP automation"""
-    print("\n🚀 CSP ADMIN AUTOMATION")
+    """Chạy tự động hóa CSP thực tế"""
+    print("\n🚀 TỰ ĐỘNG HÓA CSP ADMIN")
     print("-" * 35)
     
-    # Check if input file exists
+    # Kiểm tra file đầu vào
     input_path = get_input_file_path()
     if not os.path.exists(input_path):
-        print(f"❌ Input file not found: {input_path}")
-        print(f"📁 Application directory: {get_application_path()}")
-        print("💡 Please ensure input.json is in the same directory as the executable.")
-        print("\n📝 You can:")
-        print("   1. Copy the input.json file to the application directory")
-        print("   2. Create a new input.json file with your configuration")
-        input("\nPress Enter to continue...")
+        print(f"❌ Không tìm thấy file: {input_path}")
+        print("� Đặt input.json cùng thư mục với file thực thi")
+        input("\nNhấn Enter để tiếp tục...")
         return
     
     try:
-        # Load and validate input file
+        # Tải và xác thực file đầu vào
         with open(input_path, 'r', encoding='utf-8') as f:
             config_data = json.load(f)
         
-        print(f"✅ Loaded configuration from {input_path}")
-        print(f"📊 Found {len(config_data.get('users', []))} users to process")
-        
-        # Show configuration summary
-        admin_url = config_data.get('admin_credentials', {}).get('csp_admin_url', 'Not specified')
-        admin_user = config_data.get('admin_credentials', {}).get('username', 'Not specified')
-        
-        print(f"\n📋 Configuration Summary:")
-        print(f"   Admin URL: {admin_url}")
-        print(f"   Admin User: {admin_user}")
-        print(f"   Users to process: {len(config_data.get('users', []))}")
-        
-        # Show users list
         users = config_data.get('users', [])
+        admin_user = config_data.get('admin_credentials', {}).get('username', 'Không xác định')
+        
+        print(f"✅ Tải thành công: {len(users)} người dùng")
+        print(f"👤 Admin: {admin_user}")
+        
+        # Hiển thị danh sách người dùng ngắn gọn
         if users:
-            print(f"\n👥 Users to process:")
+            print(f"\n👥 Danh sách xử lý:")
             for i, user in enumerate(users, 1):
-                target_user = user.get('target_user', 'Unknown')
-                new_role = user.get('new_role') or 'No change'
-                new_branch = user.get('new_branch') or 'No change'
-                branch_hierarchy = user.get('branch_hierarchy')
+                target_user = user.get('target_user', 'Không rõ')
+                new_role = user.get('new_role') or 'Không đổi'
                 
-                print(f"   {i}. {target_user}")
-                print(f"      Role: {new_role}")
-                if branch_hierarchy:
-                    print(f"      Branch Hierarchy: {' → '.join(branch_hierarchy)}")
-                else:
-                    print(f"      Branch: {new_branch}")
+                # Lấy thông tin chi nhánh (chỉ lấy mã chi nhánh cuối cùng)
+                branch_hierarchy = user.get('branch_hierarchy', [])
+                branch_code = branch_hierarchy[-1] if branch_hierarchy else 'Không rõ'
+                
+                print(f"   {i}. {target_user} | Chi nhánh: {branch_code} | Vai trò: {new_role}")
         
-        # Ask for confirmation
-        print(f"\n⚠️  IMPORTANT:")
-        print("• This will perform actual automation using browser automation")
-        print("• Make sure you have the required dependencies installed")
-        print("• Ensure the CSP admin portal is accessible")
-        print("• This may take several minutes to complete")
+        # Xác nhận
+        print(f"\n⚠️  Sẽ thực hiện tự động hóa trình duyệt thực tế")
+        confirm = input("Tiếp tục? (y/N): ").strip().lower()
         
-        confirm = input("\nDo you want to proceed with the automation? (y/N): ").strip().lower()
-        
-        if confirm in ['y', 'yes']:
-            print("\n🔄 Starting automation...")
+        if confirm in ['y', 'yes', 'c', 'có']:
+            print("\n🔄 Bắt đầu tự động hóa...")
             run_actual_csp_automation(input_path)
         else:
-            print("❌ Automation cancelled by user.")
+            print("❌ Đã hủy tự động hóa")
             
     except json.JSONDecodeError as e:
-        print(f"❌ Invalid JSON format in {input_path}: {e}")
+        print(f"❌ JSON không hợp lệ: {e}")
     except Exception as e:
-        print(f"❌ Error loading configuration: {e}")
+        print(f"❌ Lỗi: {e}")
     
-    input("\nPress Enter to continue...")
+    input("\nNhấn Enter để tiếp tục...")
 
 def run_actual_csp_automation(input_file: str):
-    """Run the actual CSP automation"""
+    """Chạy tự động hóa CSP thực tế"""
     try:
-        print("📦 Importing CSP automation module...")
-        
-        # Try to import the CSP module
         try:
             from src.csp.csp_admin_change_role_and_branch import CSPAdminRoleAndBranchChanger
-            print("✅ CSP module imported successfully")
+            from src.config.nova_act_config import get_nova_act_api_key
         except ImportError as e:
-            print(f"❌ Failed to import CSP module: {e}")
-            print("Make sure all dependencies are installed:")
-            print("   pip install nova-act fire pydantic")
+            print(f"❌ Không thể import: {e}")
+            print("Cài đặt: pip install nova-act fire pydantic")
             return
         
-        # Create and run the automation
-        print("🚀 Initializing CSP automation...")
-        changer = CSPAdminRoleAndBranchChanger("")
-        
-        # Ask for parallel workers option
-        print("\n⚙️  Automation Configuration:")
-        print("Using isolated sessions (each user gets a fresh browser session)")
-        
-        parallel_workers = 1
+        # Get Nova Act API key
         try:
-            workers_input = input("Number of parallel workers (1-4, default=1): ").strip()
+            api_key = get_nova_act_api_key()
+            print("✅ Đã tải Nova Act API key")
+        except Exception as e:
+            print(f"❌ Lỗi Nova Act API key: {e}")
+            print("💡 Vui lòng cấu hình API key trong src/config/nova_act_config.py")
+            return
+        
+        changer = CSPAdminRoleAndBranchChanger("", api_key)
+        
+        # Cấu hình worker
+        parallel_workers = 2
+        try:
+            workers_input = input("Số worker song song (1-4, mặc định=2): ").strip()
             if workers_input:
                 parallel_workers = max(1, min(4, int(workers_input)))
         except ValueError:
-            parallel_workers = 1
+            parallel_workers = 2
         
-        print(f"\n🔧 Configuration:")
-        print(f"   Session mode: Isolated (recommended)")
-        print(f"   Parallel workers: {parallel_workers}")
+        print(f"🔧 Worker: {parallel_workers}")
+        print("=" * 40)
         
-        print(f"\n🎯 Starting automation...")
-        print("=" * 50)
-        
-        # Run the automation with isolated sessions
+        # Chạy tự động hóa
         success = changer.run_batch(
             input_file=input_file,
             per_user_session=True,
             parallel_workers=parallel_workers if parallel_workers > 1 else None
         )
         
-        print("=" * 50)
+        print("=" * 40)
         if success:
-            print("✅ Automation completed successfully!")
-            print("📄 Results have been saved to a timestamped JSON file.")
+            print("✅ Hoàn thành thành công!")
         else:
-            print("⚠️  Automation completed with some failures.")
-            print("📄 Check the results file for detailed information.")
+            print("⚠️  Hoàn thành với lỗi")
+        print("📄 Kết quả lưu trong file JSON")
             
     except KeyboardInterrupt:
-        print("\n\n⚠️  Automation interrupted by user")
+        print("\n⚠️  Bị gián đoạn")
     except Exception as e:
-        print(f"\n❌ Automation error: {e}")
-        print("Please check your configuration and try again.")
+        print(f"\n❌ Lỗi: {e}")
 
 def main():
-    """Main function"""
+    """Hàm chính"""
     try:
         while True:
             clear_screen()
             print_header()
             print_menu()
             
-            choice = input("Choose an option (1-6): ").strip()
+            choice = input("Chọn một tùy chọn (1-6): ").strip()
             
             if choice == '1':
-                say_hello()
-            elif choice == '2':
                 csp_admin_change_role_and_branch()
             elif choice == '6':
-                print("\n👋 Goodbye! Thanks for using the app!")
+                print("\n👋 Tạm biệt! Cảm ơn bạn đã sử dụng ứng dụng!")
                 break
             else:
-                print("\n❌ Invalid choice! Please try again.")
-                input("Press Enter to continue...")
+                print("\n❌ Lựa chọn không hợp lệ! Vui lòng thử lại.")
+                input("Nhấn Enter để tiếp tục...")
                 
     except KeyboardInterrupt:
-        print("\n\n👋 Goodbye! Thanks for using the app!")
+        print("\n\n👋 Tạm biệt! Cảm ơn bạn đã sử dụng ứng dụng!")
     except Exception as e:
-        print(f"\n❌ An error occurred: {e}")
+        print(f"\n❌ Đã xảy ra lỗi: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

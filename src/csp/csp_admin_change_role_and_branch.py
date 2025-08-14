@@ -53,6 +53,21 @@ from pydantic import BaseModel
 from nova_act import NovaAct, BOOL_SCHEMA
 from nova_act.types.errors import StartFailed
 
+# Import Nova Act configuration
+try:
+    from src.config.nova_act_config import get_nova_act_api_key
+except ImportError:
+    # Fallback for development/non-built environments
+    def get_nova_act_api_key():
+        import os
+        api_key = os.getenv('NOVA_ACT_API_KEY')
+        if not api_key:
+            raise ValueError(
+                "Nova Act API key not found. Please set NOVA_ACT_API_KEY environment variable "
+                "or configure it in src/config/nova_act_config.py"
+            )
+        return api_key
+
 
 class AdminCredentials(BaseModel):
     """Schema for admin credentials"""
@@ -89,8 +104,9 @@ class RoleChangeResult(BaseModel):
 class CSPAdminRoleAndBranchChanger:
     """Automate CSP admin role and branch change operations"""
     
-    def __init__(self, csp_admin_url: str):
+    def __init__(self, csp_admin_url: str, nova_act_api_key: str = None):
         self.csp_admin_url = csp_admin_url
+        self.nova_act_api_key = nova_act_api_key
         self.session_data = {}
         self.results: List[RoleChangeResult] = []
     
@@ -701,11 +717,12 @@ class CSPAdminRoleAndBranchChanger:
             lock = threading.Lock()
 
             def worker(user_request: UserChangeRequest) -> RoleChangeResult:
-                local_changer = CSPAdminRoleAndBranchChanger("")  # independent session data
+                local_changer = CSPAdminRoleAndBranchChanger("", self.nova_act_api_key)  # independent session data
                 for attempt in range(1, start_retries + 1):
                     try:
                         with NovaAct(starting_page=config.admin_credentials.csp_admin_url,
-                                     headless=False, ignore_https_errors=True) as nova:
+                                     headless=False, ignore_https_errors=True, 
+                                     nova_act_api_key=local_changer.nova_act_api_key) as nova:
                             if not local_changer.login(nova, config.admin_credentials.username, admin_password):
                                 return RoleChangeResult(
                                     user_email=user_request.target_user,
@@ -778,7 +795,8 @@ class CSPAdminRoleAndBranchChanger:
                 for attempt in range(1, start_retries + 1):
                     try:
                         with NovaAct(starting_page=config.admin_credentials.csp_admin_url,
-                                     headless=False, ignore_https_errors=True) as nova:
+                                     headless=False, ignore_https_errors=True, 
+                                     nova_act_api_key=self.nova_act_api_key) as nova:
                             session_started = True
                             if not self.login(nova, config.admin_credentials.username, admin_password):
                                 self.results.append(RoleChangeResult(
@@ -834,7 +852,8 @@ class CSPAdminRoleAndBranchChanger:
                 time.sleep(1)  # polite gap between sessions
         else:
             with NovaAct(starting_page=config.admin_credentials.csp_admin_url,
-                         headless=False, ignore_https_errors=True) as nova:
+                         headless=False, ignore_https_errors=True, 
+                         nova_act_api_key=self.nova_act_api_key) as nova:
                 try:
                     if not self.login(nova, config.admin_credentials.username, admin_password):
                         self.save_results()
@@ -901,15 +920,17 @@ def main(
     password: str = None,
     per_user_session: bool = True,
     parallel_workers: int = 0,
-    start_retries: int = 2
+    start_retries: int = 2,
+    nova_act_api_key: str = None
 ):
     """
     Execute CSP admin role and branch change automation from JSON input file.
     
     Args:
         input_file: Path to JSON file containing user change requests
-    password: Admin password (will prompt if not provided)
-    per_user_session: Launch a new browser session per user for isolation (default True)
+        password: Admin password (will prompt if not provided)
+        per_user_session: Launch a new browser session per user for isolation (default True)
+        nova_act_api_key: Nova Act API key (if not provided, will use environment variable)
     """
     
     if not input_file:
@@ -922,12 +943,21 @@ def main(
         print("You can create a sample input file using the create_sample_input_file() function")
         return
     
+    # Get Nova Act API key from parameter or configuration
+    if not nova_act_api_key:
+        try:
+            nova_act_api_key = get_nova_act_api_key()
+            print("✅ Using Nova Act API key from configuration")
+        except Exception as e:
+            print(f"❌ Error getting Nova Act API key: {e}")
+            return
+    
     print(f"🚀 Starting CSP Admin Role and Branch Change Automation")
     print(f"� Input file: {input_file}")
     print("=" * 50)
     
     # Create and run the automation
-    changer = CSPAdminRoleAndBranchChanger("")  # URL will be loaded from config
+    changer = CSPAdminRoleAndBranchChanger("", nova_act_api_key)  # URL will be loaded from config
     success = changer.run_batch(input_file, password, per_user_session=per_user_session, parallel_workers=parallel_workers, start_retries=start_retries)
     
     if success:
