@@ -168,15 +168,17 @@ class CSPAdminRoleAndBranchChanger:
         nova.act("Click the purple Enter button to login")
         time.sleep(3)
         
-        # Single check for login success
-        success = nova.act("Check if we are now logged in - look for any admin interface, dashboard, or navigation menu indicating successful login", 
-                          schema=BOOL_SCHEMA)
+        # Check for successful login by verifying admin interface is displayed
+        admin_interface_displayed = nova.act(
+            "Check if the CSP admin interface is successfully displayed - look for the left navigation menu with Administration section, user management table, or any admin dashboard elements", 
+            schema=BOOL_SCHEMA
+        )
         
-        if success.matches_schema and success.parsed_response:
-            print("✅ Login successful!")
+        if admin_interface_displayed.matches_schema and admin_interface_displayed.parsed_response:
+            print("✅ Login successful - admin interface displayed!")
             return True
         else:
-            print("❌ Login failed")
+            print("❌ Login failed - admin interface not displayed")
             return False
     
     def navigate_to_user_management(self, nova: NovaAct) -> bool:
@@ -212,7 +214,7 @@ class CSPAdminRoleAndBranchChanger:
         print(f"🔍 Searching for user: {target_user}")
         
         # Expand filters if needed and search
-        nova.act("Click More filters next to the search fields")
+        nova.act("Click More filters next to the search fields. Stay there. Don't return")
         nova.act(f"Enter '{target_user}' in the Login field")
         nova.act("Click the purple Search button")
         time.sleep(3)
@@ -380,6 +382,81 @@ class CSPAdminRoleAndBranchChanger:
             self.session_data['branch_saved'] = False
             return False
 
+    def change_bank_user_hierarchical(self, nova: NovaAct, branch_hierarchy: List[str]) -> bool:
+        """Change bank user in the Person tab using hierarchical navigation through branch_hierarchy.
+        
+        Args:
+            nova: NovaAct instance
+            branch_hierarchy: List of hierarchical levels to navigate (e.g., ["VIB Bank", "North", "003_CAU GIAY"])
+            
+        Returns:
+            bool: True if bank user was successfully changed, False otherwise
+        """
+        if not branch_hierarchy or len(branch_hierarchy) == 0:
+            print("❌ Empty branch hierarchy provided for bank user")
+            return False
+            
+        final_branch = branch_hierarchy[-1]  # Last element is the target branch
+        print(f"🏦 Changing bank user using hierarchical path: {' → '.join(branch_hierarchy)}")
+        
+        # Ensure we're on the Roles tab before any checks
+        nova.act("Click on the 'Roles' tab in the Edit user modal")
+        
+        # Composite pre-check without opening panel - check if final branch already present in Bank user field
+        pre_token = nova.act(
+            f"Just read the current Bank user textbox (no clicks) and return True if it already CONTAINS '{final_branch}' (substring acceptable).", 
+            schema=BOOL_SCHEMA
+        )
+        if pre_token.matches_schema and pre_token.parsed_response:
+            print(f"ℹ️ Bank user already contains target token '{final_branch}'; skipping")
+            self.session_data['last_bank_user_change_performed'] = False
+            return True
+        
+        # Step 1: Open bank user selector panel
+        print("🔍 Opening bank user selection panel...")
+        nova.act("In the Person tab, click the button with three dots (...) next to the Bank user field to open the bank user selection panel")
+        time.sleep(2)
+        
+        # Step 2: Navigate through hierarchy levels step by step
+        for i, level in enumerate(branch_hierarchy):
+            print(f"📍 Navigating to bank user level {i+1}/{len(branch_hierarchy)}: '{level}'")
+            
+            if i == 0:
+                # First level: Find and click on the bank level (VIB Bank)
+                print(f"🏦 Selecting bank level: '{level}'")
+                nova.act(f"In the leftmost column of the bank user selection panel, find and click on the item labeled '{level}' to expand it")
+            elif i == 1:
+                # Second level: Find and click on the region level (North/South)
+                print(f"🌍 Selecting region level: '{level}'")
+                nova.act(f"In the middle column that appeared after selecting the bank, find and click on the item labeled '{level}' to expand it")
+            else:
+                # Final level: Find and select the specific branch/bank user
+                print(f"🎯 Selecting final bank user: '{level}'")
+                # Use the search box in the rightmost column to find the specific bank user
+                nova.act(f"In the rightmost column, use the search input field (with placeholder 'Search ...' if available) and type '{level}' to filter the bank users")
+                # Find and check the checkbox for the specific bank user
+                nova.act(f"In the filtered results in the rightmost column, find the row that contains '{level}' and click its checkbox to select it")
+        
+        # Step 3: Apply selection
+        print("💾 Applying bank user selection...")
+        nova.act("Click the purple 'Select' button at the bottom of the bank user selection panel to apply the selection")
+        time.sleep(2)
+        
+        # Verify the change
+        verify_change = nova.act(
+            f"Without reopening the selector, confirm the Bank user textbox now CONTAINS '{final_branch}'. Return True if token present.",
+            schema=BOOL_SCHEMA
+        )
+        
+        if verify_change.matches_schema and verify_change.parsed_response:
+            print(f"✅ Bank user updated using hierarchical path: {final_branch}")
+            self.session_data['last_bank_user_change_performed'] = True
+            return True
+        else:
+            print(f"❌ Failed to update bank user using hierarchical path: {final_branch}")
+            self.session_data['last_bank_user_change_performed'] = False
+            return False
+
     def change_user_branch(self, nova: NovaAct, new_branch: str, auto_save: bool = True) -> bool:
         """Change user branch using the Scope control.
 
@@ -528,6 +605,20 @@ class CSPAdminRoleAndBranchChanger:
 
             # Both role and branch (single save)
             if role_requested and branch_requested:
+                # Change bank user first (if using hierarchy)
+                if use_hierarchy:
+                    if not self.change_bank_user_hierarchical(nova, user_request.branch_hierarchy):
+                        self.results.append(RoleChangeResult(
+                            user_email=user_request.target_user,
+                            old_role="unknown",
+                            new_role=user_request.new_role,
+                            old_branch="unknown",
+                            new_branch=user_request.new_branch or "unchanged",
+                            status="failed - bank user change failed",
+                            timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
+                        ))
+                        return False
+                
                 if not self.change_user_role(nova, user_request.new_role):
                     self.results.append(RoleChangeResult(
                         user_email=user_request.target_user,
@@ -560,9 +651,10 @@ class CSPAdminRoleAndBranchChanger:
                     return False
                 
                 branch_changed = self.session_data.get('last_branch_change_performed', False)
+                bank_user_changed = self.session_data.get('last_bank_user_change_performed', False)
                 
                 # Only save if there were actual changes
-                if role_changed or branch_changed:
+                if role_changed or branch_changed or bank_user_changed:
                     if not self.save_changes(nova):
                         self.results.append(RoleChangeResult(
                             user_email=user_request.target_user,
@@ -575,7 +667,7 @@ class CSPAdminRoleAndBranchChanger:
                         ))
                         return False
                 else:
-                    print("ℹ️ No changes needed - role and branch already set correctly")
+                    print("ℹ️ No changes needed - all fields already set correctly")
                     # Close the edit modal since no changes were made
                     nova.act("Close the edit modal by clicking Cancel, X button, or clicking outside the modal")
                         
@@ -609,6 +701,20 @@ class CSPAdminRoleAndBranchChanger:
                     print("ℹ️ No changes needed - role already set correctly")
                         
             elif branch_requested:
+                # Change bank user first (if using hierarchy)
+                if use_hierarchy:
+                    if not self.change_bank_user_hierarchical(nova, user_request.branch_hierarchy):
+                        self.results.append(RoleChangeResult(
+                            user_email=user_request.target_user,
+                            old_role="unknown",
+                            new_role=user_request.new_role or "unchanged",
+                            old_branch="unknown",
+                            new_branch=user_request.new_branch or "unchanged",
+                            status="failed - bank user change failed",
+                            timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
+                        ))
+                        return False
+                
                 # Use hierarchical or simple branch change with auto_save=True
                 if use_hierarchy:
                     branch_success = self.change_user_branch_hierarchical(nova, user_request.branch_hierarchy, auto_save=True)
@@ -627,10 +733,12 @@ class CSPAdminRoleAndBranchChanger:
                     ))
                     return False
                 
-                # Check if a branch change was actually performed
+                # Check if changes were actually performed
                 branch_changed = self.session_data.get('last_branch_change_performed', False)
-                if not branch_changed:
-                    print("ℹ️ No changes needed - branch already set correctly")
+                bank_user_changed = self.session_data.get('last_bank_user_change_performed', False)
+                
+                if not branch_changed and not bank_user_changed:
+                    print("ℹ️ No changes needed - branch and bank user already set correctly")
             else:
                 print("ℹ️ No changes requested (neither role nor branch)")
 
@@ -642,15 +750,17 @@ class CSPAdminRoleAndBranchChanger:
             # Determine if any changes were actually made
             role_changed = self.session_data.get('last_role_change_performed', False)
             branch_changed = self.session_data.get('last_branch_change_performed', False)
+            bank_user_changed = self.session_data.get('last_bank_user_change_performed', False)
             
             # Create appropriate status message
             if role_requested and branch_requested:
-                if role_changed and branch_changed:
-                    status = "success - both role and branch updated"
-                elif role_changed:
-                    status = "success - role updated, branch already correct"
-                elif branch_changed:
-                    status = "success - branch updated, role already correct"
+                changed_items = []
+                if role_changed: changed_items.append("role")
+                if branch_changed: changed_items.append("branch")
+                if bank_user_changed: changed_items.append("bank user")
+                
+                if changed_items:
+                    status = f"success - {' and '.join(changed_items)} updated"
                 else:
                     status = "success - no changes needed, already configured correctly"
             elif role_requested:
@@ -659,10 +769,14 @@ class CSPAdminRoleAndBranchChanger:
                 else:
                     status = "success - role already correct"
             elif branch_requested:
-                if branch_changed:
-                    status = "success - branch updated"
+                changed_items = []
+                if branch_changed: changed_items.append("branch")
+                if bank_user_changed: changed_items.append("bank user")
+                
+                if changed_items:
+                    status = f"success - {' and '.join(changed_items)} updated"
                 else:
-                    status = "success - branch already correct"
+                    status = "success - branch and bank user already correct"
             else:
                 status = "success - no changes requested"
 
