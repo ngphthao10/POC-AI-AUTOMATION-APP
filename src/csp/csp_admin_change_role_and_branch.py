@@ -170,7 +170,7 @@ class CSPAdminRoleAndBranchChanger:
         
         # Check for successful login by verifying admin interface is displayed
         admin_interface_displayed = nova.act(
-            "Check if the CSP admin interface is successfully displayed - look for the left navigation menu with Administration section, user management table, or any admin dashboard elements", 
+            "Check if the CSP admin interface is successfully displayed - look for the left navigation menu with Administration section, user management table, any admin dashboard elements, or customer service portal page", 
             schema=BOOL_SCHEMA
         )
         
@@ -226,7 +226,7 @@ class CSPAdminRoleAndBranchChanger:
             return False
         # Ensure the specific user row is present before interacting
         row_present = nova.act(
-            f"Check that a table row exists where the Login cell text exactly equals '{target_user}' (case-insensitive)",
+            f"Check that a table row exists where the Login cell text contains '{target_user}' (case-insensitive, substring match acceptable)",
             schema=BOOL_SCHEMA
         )
         if not (row_present.matches_schema and row_present.parsed_response):
@@ -237,9 +237,9 @@ class CSPAdminRoleAndBranchChanger:
         for attempt in range(1, 3):
             if attempt > 1:
                 print("↻ Retrying opening Edit modal")
-            # Open actions dropdown for the exact row
+            # Open actions dropdown for the row containing the target user
             nova.act(
-                f"Within the table row whose Login cell exactly equals '{target_user}', click its Actions dropdown button (labeled 'Select')"
+                f"Within the table row whose Login cell contains '{target_user}' (substring match), click its Actions dropdown button (labeled 'Select')"
             )
             # Click only the 'Edit' option (avoid View details / Manage authentication)
             nova.act(
@@ -275,7 +275,7 @@ class CSPAdminRoleAndBranchChanger:
         
         # Composite overwrite without selecting from dropdown suggestions
         nova.act(
-            f"If multiple role input fields are present, identify ONLY the one that already displays a non-empty value (current role). Click that populated field once to focus it. Do NOT click any second/duplicate/empty role field or placeholder. Without opening a dropdown or clicking any option, select all text in that focused populated field and replace it with '{new_role}', then blur (click a neutral area) to commit. Do NOT click any 'Select role' option or any list item. Do NOT click any Close button."
+            f"If multiple role input fields are present, identify ONLY the one that already displays a non-empty value (current role). Click that populated field once to focus it. Click the option contain '{new_role}' to select it. Do NOT click any second/duplicate/empty role field or placeholder. Without opening a dropdown or clicking any option, select all text in that focused populated field and replace it with '{new_role}'. Do NOT click any 'Select role' option or any list item. Do NOT click any 'Close' button."
         )
 
         # Verify field text now shows desired value
@@ -476,7 +476,7 @@ class CSPAdminRoleAndBranchChanger:
             return True
         # Single composite action: activate Roles tab, open correct scope input, open panel, search & select, apply
         composite = nova.act(
-            f"Do ALL of these steps atomically: (1) Ensure 'Roles' tab is active (click if not); (2) Click the FIRST non-empty scope input (not the empty placeholder) to open the scope selection panel; (3) Once panel visible, click FIRST selectable item in leftmost column to focus; (4) Focus rightmost column search input with placeholder 'Search ...' and replace text with '{new_branch}'; (5) In filtered results find row whose label exactly equals '{new_branch}' (case-insensitive) and ensure its checkbox is checked; (6) Click the purple Select button to apply. Avoid extra intermediate confirmations or reopening the panel.)"
+            f"Do ALL of these steps atomically: (1) Ensure 'Roles' tab is active (click if not); (2) Click the FIRST non-empty scope input (not the empty placeholder) to open the scope selection panel; (3) Once panel visible, click FIRST selectable item in leftmost column to focus; (4) Focus rightmost column search input with placeholder 'Search ...' and replace text with '{new_branch}'; (5) In filtered results find row whose label contains '{new_branch}' (case-insensitive, substring match acceptable) and ensure its checkbox is checked; (6) Click the purple Select button to apply. Avoid extra intermediate confirmations or reopening the panel.)"
         )
         if auto_save:
             # Post-action verify + save combined

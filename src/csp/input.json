@@ -6,19 +6,19 @@
   },
   "users": [
     {
-      "target_user": "thuy.lethu4",
-      "new_role": "CSP-RB-TELLER",
-      "branch_hierarchy": ["VIB Bank", "North", "003"]
+      "target_user": "hang.lebich",
+      "new_role": "CSP_Inquiry",
+      "branch_hierarchy": ["VIB Bank", "North", "002"]
     },
     {
-      "target_user": "nguyendu.bpc.test",
+      "target_user": "hang.maithuy2",
       "new_role": "CSP_Inquiry",
       "branch_hierarchy": null
     },
     {
-      "target_user": "phuong.dinhlan",
+      "target_user": "anh.vutu",
       "new_role": null,
-      "branch_hierarchy": ["VIB Bank", "South", "402"]
+      "branch_hierarchy": ["VIB Bank", "South", "412"]
     }
   ]
 }
