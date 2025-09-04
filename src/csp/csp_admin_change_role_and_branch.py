@@ -154,11 +154,10 @@ class CSPAdminRoleAndBranchChanger:
         
         # Enter username with Unicode encoding for special characters
         nova.act("Find and click the username field")
-        unicode_username = username.encode('unicode_escape').decode('ascii')
+        # unicode_username = username.encode('unicode_escape').decode('ascii')
         username_field = nova.page.locator('input').first
         username_field.clear()
-        for char in unicode_username:
-            username_field.type(char)
+        username_field.type(username)
         
         # Enter password
         nova.act("Find and click the password field")

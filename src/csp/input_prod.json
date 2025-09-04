@@ -1,0 +1,14 @@
+{
+  "admin_credentials": {
+    "username": "north\\chi.dth",
+    "password": "Muadong2025*",
+    "csp_admin_url": "https://svcms.vib/branchgui-web-client/portal/users/list"
+  },
+  "users": [
+    {
+      "target_user": "chi.daohue",
+      "new_role": "CSP_Inquiry",
+      "branch_hierarchy": null
+    }
+  ]
+}
