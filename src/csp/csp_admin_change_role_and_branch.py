@@ -93,9 +93,7 @@ class InputConfig(BaseModel):
 class RoleChangeResult(BaseModel):
     """Schema for role change operation results"""
     user_email: str
-    old_role: str
     new_role: str
-    old_branch: str
     new_branch: str
     status: str
     timestamp: str
@@ -588,9 +586,7 @@ class CSPAdminRoleAndBranchChanger:
             if not self.search_user(nova, user_request.target_user):
                 self.results.append(RoleChangeResult(
                     user_email=user_request.target_user,
-                    old_role="unknown",
                     new_role=user_request.new_role or "unchanged",
-                    old_branch="unknown",
                     new_branch=user_request.new_branch or "unchanged",
                     status="failed - user not found",
                     timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -609,9 +605,7 @@ class CSPAdminRoleAndBranchChanger:
                     if not self.change_bank_user_hierarchical(nova, user_request.branch_hierarchy):
                         self.results.append(RoleChangeResult(
                             user_email=user_request.target_user,
-                            old_role="unknown",
                             new_role=user_request.new_role,
-                            old_branch="unknown",
                             new_branch=user_request.new_branch or "unchanged",
                             status="failed - bank user change failed",
                             timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -621,9 +615,7 @@ class CSPAdminRoleAndBranchChanger:
                 if not self.change_user_role(nova, user_request.new_role):
                     self.results.append(RoleChangeResult(
                         user_email=user_request.target_user,
-                        old_role="unknown",
                         new_role=user_request.new_role,
-                        old_branch="unknown",
                         new_branch=user_request.new_branch or "unchanged",
                         status="failed - role change failed",
                         timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -640,9 +632,7 @@ class CSPAdminRoleAndBranchChanger:
                 if not branch_success:
                     self.results.append(RoleChangeResult(
                         user_email=user_request.target_user,
-                        old_role="unknown",
                         new_role=user_request.new_role or "unchanged",
-                        old_branch="unknown",
                         new_branch=user_request.new_branch or "unchanged",
                         status="failed - branch change failed",
                         timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -657,9 +647,7 @@ class CSPAdminRoleAndBranchChanger:
                     if not self.save_changes(nova):
                         self.results.append(RoleChangeResult(
                             user_email=user_request.target_user,
-                            old_role="unknown",
                             new_role=user_request.new_role or "unchanged",
-                            old_branch="unknown",
                             new_branch=user_request.new_branch or "unchanged",
                             status="failed - save failed",
                             timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -674,9 +662,7 @@ class CSPAdminRoleAndBranchChanger:
                 if not self.change_user_role(nova, user_request.new_role):
                     self.results.append(RoleChangeResult(
                         user_email=user_request.target_user,
-                        old_role="unknown",
                         new_role=user_request.new_role,
-                        old_branch="unknown",
                         new_branch=user_request.new_branch or "unchanged",
                         status="failed - role change failed",
                         timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -688,9 +674,7 @@ class CSPAdminRoleAndBranchChanger:
                     if not self.save_changes(nova):
                         self.results.append(RoleChangeResult(
                             user_email=user_request.target_user,
-                            old_role="unknown",
                             new_role=user_request.new_role or "unchanged",
-                            old_branch="unknown",
                             new_branch=user_request.new_branch or "unchanged",
                             status="failed - save failed",
                             timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -705,9 +689,7 @@ class CSPAdminRoleAndBranchChanger:
                     if not self.change_bank_user_hierarchical(nova, user_request.branch_hierarchy):
                         self.results.append(RoleChangeResult(
                             user_email=user_request.target_user,
-                            old_role="unknown",
                             new_role=user_request.new_role or "unchanged",
-                            old_branch="unknown",
                             new_branch=user_request.new_branch or "unchanged",
                             status="failed - bank user change failed",
                             timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -723,9 +705,7 @@ class CSPAdminRoleAndBranchChanger:
                 if not branch_success:
                     self.results.append(RoleChangeResult(
                         user_email=user_request.target_user,
-                        old_role="unknown",
                         new_role=user_request.new_role or "unchanged",
-                        old_branch="unknown",
                         new_branch=user_request.new_branch or "unchanged",
                         status="failed - branch change failed",
                         timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -781,9 +761,7 @@ class CSPAdminRoleAndBranchChanger:
 
             self.results.append(RoleChangeResult(
                 user_email=user_request.target_user,
-                old_role="unknown",
                 new_role=user_request.new_role or "unchanged",
-                old_branch="unknown",
                 new_branch=effective_new_branch,
                 status=status,
                 timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -795,9 +773,7 @@ class CSPAdminRoleAndBranchChanger:
             print(f"❌ Error processing {user_request.target_user}: {e}")
             self.results.append(RoleChangeResult(
                 user_email=user_request.target_user,
-                old_role="unknown",
                 new_role=user_request.new_role or "unchanged",
-                old_branch="unknown",
                 new_branch=user_request.new_branch or "unchanged",
                 status=f"failed - {str(e)}",
                 timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -839,9 +815,7 @@ class CSPAdminRoleAndBranchChanger:
                             if not local_changer.login(nova, config.admin_credentials.username, admin_password):
                                 return RoleChangeResult(
                                     user_email=user_request.target_user,
-                                    old_role="unknown",
                                     new_role=user_request.new_role or "unchanged",
-                                    old_branch="unknown",
                                     new_branch=user_request.new_branch or "unchanged",
                                     status="failed - login failed",
                                     timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -849,9 +823,7 @@ class CSPAdminRoleAndBranchChanger:
                             if not local_changer.navigate_to_user_management(nova):
                                 return RoleChangeResult(
                                     user_email=user_request.target_user,
-                                    old_role="unknown",
                                     new_role=user_request.new_role or "unchanged",
-                                    old_branch="unknown",
                                     new_branch=user_request.new_branch or "unchanged",
                                     status="failed - navigation failed",
                                     timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -865,9 +837,7 @@ class CSPAdminRoleAndBranchChanger:
                             continue
                         return RoleChangeResult(
                             user_email=user_request.target_user,
-                            old_role="unknown",
                             new_role=user_request.new_role or "unchanged",
-                            old_branch="unknown",
                             new_branch=user_request.new_branch or "unchanged",
                             status="failed - start timeout",
                             timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -875,9 +845,7 @@ class CSPAdminRoleAndBranchChanger:
                     except Exception as e:
                         return RoleChangeResult(
                             user_email=user_request.target_user,
-                            old_role="unknown",
                             new_role=user_request.new_role or "unchanged",
-                            old_branch="unknown",
                             new_branch=user_request.new_branch or "unchanged",
                             status=f"failed - {str(e)}",
                             timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -914,9 +882,7 @@ class CSPAdminRoleAndBranchChanger:
                             if not self.login(nova, config.admin_credentials.username, admin_password):
                                 self.results.append(RoleChangeResult(
                                     user_email=user_request.target_user,
-                                    old_role="unknown",
                                     new_role=user_request.new_role or "unchanged",
-                                    old_branch="unknown",
                                     new_branch=user_request.new_branch or "unchanged",
                                     status="failed - login failed",
                                     timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -925,9 +891,7 @@ class CSPAdminRoleAndBranchChanger:
                             if not self.navigate_to_user_management(nova):
                                 self.results.append(RoleChangeResult(
                                     user_email=user_request.target_user,
-                                    old_role="unknown",
                                     new_role=user_request.new_role or "unchanged",
-                                    old_branch="unknown",
                                     new_branch=user_request.new_branch or "unchanged",
                                     status="failed - navigation failed",
                                     timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -943,9 +907,7 @@ class CSPAdminRoleAndBranchChanger:
                             continue
                         self.results.append(RoleChangeResult(
                             user_email=user_request.target_user,
-                            old_role="unknown",
                             new_role=user_request.new_role or "unchanged",
-                            old_branch="unknown",
                             new_branch=user_request.new_branch or "unchanged",
                             status="failed - start timeout",
                             timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
@@ -954,9 +916,7 @@ class CSPAdminRoleAndBranchChanger:
                         print(f"❌ Session error for {user_request.target_user}: {e}")
                         self.results.append(RoleChangeResult(
                             user_email=user_request.target_user,
-                            old_role="unknown",
                             new_role=user_request.new_role or "unchanged",
-                            old_branch="unknown",
                             new_branch=user_request.new_branch or "unchanged",
                             status=f"failed - {str(e)}",
                             timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
