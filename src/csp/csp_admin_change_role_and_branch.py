@@ -210,7 +210,7 @@ class CSPAdminRoleAndBranchChanger:
         print(f"📄 Results saved to: {output_file}")
     
     def login(self, nova: NovaAct, username: str, password: str) -> bool:
-        """Handle admin login process"""
+        """Handle admin login process following Nova Act best practices"""
         logger.debug(f"Starting login process for user: {username}")
         print(f"🔐 Logging into VIB Portal as: {username}")
         
@@ -229,25 +229,38 @@ class CSPAdminRoleAndBranchChanger:
         nova.page.keyboard.type(password)
         logger.debug("Password entered")
         
-        # Submit login
+        # Step 3: Submit login form
         logger.debug("Submitting login form")
-        nova.act("Click the purple Enter button to login")
-        time.sleep(3)
+        nova.act("Click the login button to sign in")
         
-        # Check for successful login by verifying admin interface is displayed
+        # Step 4: Wait briefly for page transition
+        time.sleep(2)
+        
+        # Step 5: Verify successful login with specific elements from the screenshot
         logger.debug("Verifying login success")
-        admin_interface_displayed = nova.act(
-            "Check if the CSP admin interface is successfully displayed - look for the left navigation menu with Administration section, user management table, any admin dashboard elements, or customer service portal page", 
+        login_success = nova.act(
+            "Check if successfully logged in by looking for: the 'BPC CUSTOMER SERVICE PORTAL' header, left navigation menu with 'Administration' section, and user name displayed in top right corner", 
             schema=BOOL_SCHEMA
         )
         
-        if admin_interface_displayed.matches_schema and admin_interface_displayed.parsed_response:
-            logger.info("Login successful - admin interface displayed")
-            print("✅ Login successful - admin interface displayed!")
+        if login_success.matches_schema and login_success.parsed_response:
+            logger.info("Login successful - portal interface loaded")
+            print("✅ Login successful - portal interface loaded!")
             return True
         else:
-            logger.error("Login failed - admin interface not displayed")
-            print("❌ Login failed - admin interface not displayed")
+            # Check for specific login error indicators
+            logger.debug("Checking for login error messages")
+            error_present = nova.act(
+                "Check if there are any error messages, invalid credentials alerts, or if still on login page",
+                schema=BOOL_SCHEMA
+            )
+            
+            if error_present.matches_schema and error_present.parsed_response:
+                logger.error("Login failed - error message or still on login page")
+                print("❌ Login failed - invalid credentials or login error")
+            else:
+                logger.error("Login status unclear - unexpected page state")
+                print("❌ Login status unclear - unexpected page state")
             return False
     
     def navigate_to_user_management(self, nova: NovaAct) -> bool:
@@ -286,69 +299,163 @@ class CSPAdminRoleAndBranchChanger:
             return False
     
     def search_user(self, nova: NovaAct, target_user: str) -> bool:
-        """Search for target user and open edit form"""
+        """Search for target user and open edit form with optimized reliability"""
         logger.debug(f"Starting user search for: {target_user}")
         print(f"🔍 Searching for user: {target_user}")
         
-        # Expand filters if needed and search
-        logger.debug("Expanding search filters")
-        nova.act("Click More filters next to the search fields. Stay there. Don't return")
-        logger.debug(f"Entering search term: {target_user}")
-        nova.act(f"Enter '{target_user}' in the Login field")
-        logger.debug("Clicking search button")
-        nova.act("Click the purple Search button")
+        # Step 1: Check if advanced filters are already expanded
+        logger.debug("Checking if search filters are already expanded")
+        filters_expanded = nova.act(
+            "Check if detailed search filters are visible (ID field, Login field, Scope dropdown, Block status dropdown). Return True if all filter fields are visible, False if only basic search is shown",
+            schema=BOOL_SCHEMA
+        )
+        
+        # Step 2: Expand filters if needed
+        if not (filters_expanded.matches_schema and filters_expanded.parsed_response):
+            logger.debug("Expanding search filters")
+            nova.act("Click the 'More filters' button next to the search fields to expand the detailed filter options")
+            time.sleep(1)
+            
+            # Verify filters expanded successfully
+            filters_check = nova.act(
+                "Verify that detailed filter fields are now visible (ID, Login, Scope, Block status fields)",
+                schema=BOOL_SCHEMA
+            )
+            if not (filters_check.matches_schema and filters_check.parsed_response):
+                logger.error("Failed to expand search filters")
+                print("❌ Failed to expand search filters")
+                return False
+        else:
+            logger.debug("Search filters already expanded")
+            print("✅ Search filters already expanded")
+        
+        # Step 3: Clear and enter search term in Login field
+        logger.debug(f"Clearing and entering search term: {target_user}")
+        nova.act("Click on the Login field to focus it")
+        nova.act("Clear all text from the Login field (select all and delete if needed)")
+        nova.act(f"Type '{target_user}' in the Login field")
+        
+        # Step 4: Perform search
+        logger.debug("Performing search")
+        nova.act("Click the purple 'Search' button to execute the search")
         time.sleep(3)
         
-        # Check for results
-        logger.debug("Checking for search results")
-        no_records = nova.act("Check if 'no records found' or empty table", schema=BOOL_SCHEMA)
+        # Step 5: Verify search was executed and check results
+        logger.debug("Verifying search execution and checking for results")
+        search_executed = nova.act(
+            "Check if the search has been executed by looking for either user results in the table or a 'no records found' message",
+            schema=BOOL_SCHEMA
+        )
+        
+        if not (search_executed.matches_schema and search_executed.parsed_response):
+            logger.error("Search does not appear to have been executed")
+            print("❌ Search execution failed")
+            return False
+        
+        # Step 6: Check for no results
+        no_records = nova.act(
+            "Check if 'no records found' message is displayed or if the table is empty with no user rows",
+            schema=BOOL_SCHEMA
+        )
         if no_records.matches_schema and no_records.parsed_response:
             logger.warning(f"No records found for user: {target_user}")
             print(f"❌ No records found for user: {target_user}")
             return False
         
-        # Ensure the specific user row is present before interacting
+        # Step 7: Verify target user row exists (accounting for domain prefixes)
         logger.debug(f"Verifying user row exists for: {target_user}")
         row_present = nova.act(
-            f"Check that a table row exists where the Login cell text contains '{target_user}' (case-insensitive, substring match acceptable)",
+            f"Check that a table row exists where the Login cell contains '{target_user}' as a substring (the login might be in format like 'domain\\{target_user}' or 'prefix\\{target_user}'). Case-insensitive substring match is acceptable.",
             schema=BOOL_SCHEMA
         )
         if not (row_present.matches_schema and row_present.parsed_response):
-            logger.error(f"Could not uniquely identify row for user: {target_user}")
-            print(f"❌ Could not uniquely identify row for user: {target_user}")
+            logger.error(f"Could not find row for user: {target_user}")
+            print(f"❌ Could not find row for user: {target_user}")
+            # Additional debugging - extract what was actually found
+            found_users = nova.act("List all login values visible in the current search results table")
+            logger.debug(f"Available users in search results: {found_users.response}")
             return False
+        
+        logger.info(f"Successfully found user: {target_user}")
+        print(f"✅ Found user: {target_user}")
 
-        # Attempt to open edit modal robustly (retry once)
-        for attempt in range(1, 3):
+        # Step 8: Open edit modal with improved reliability
+        return self._open_edit_modal(nova, target_user)
+    
+    def _open_edit_modal(self, nova: NovaAct, target_user: str) -> bool:
+        """Helper method to open edit modal for a specific user with retry logic"""
+        logger.debug(f"Opening edit modal for user: {target_user}")
+        
+        for attempt in range(1, 4):  # Up to 3 attempts
             if attempt > 1:
                 logger.debug(f"Retrying edit modal open (attempt {attempt})")
-                print("↻ Retrying opening Edit modal")
+                print(f"↻ Retrying opening Edit modal (attempt {attempt})")
+                time.sleep(1)
+                
+                # Close any existing dropdown before retrying
+                nova.act("Click elsewhere on the page to close any open dropdown menus")
+                time.sleep(0.5)
             
-            # Open actions dropdown for the row containing the target user
-            logger.debug("Opening actions dropdown")
-            nova.act(
-                f"Within the table row whose Login cell contains '{target_user}' (substring match), click its Actions dropdown button (labeled 'Select')"
-            )
-            
-            # Click only the 'Edit' option (avoid View details / Manage authentication)
-            logger.debug("Clicking Edit menu item")
-            nova.act(
-                "In the opened dropdown menu, click the menu item whose visible text is exactly 'Edit' (do not click other items)"
-            )
-            time.sleep(1)
-            
-            logger.debug("Verifying edit modal opened")
-            edit_loaded = nova.act(
-                "Check if edit modal displayed (look for modal header or form fields indicating editing user)",
-                schema=BOOL_SCHEMA
-            )
-            if edit_loaded.matches_schema and edit_loaded.parsed_response:
-                logger.info(f"Edit form loaded successfully for user: {target_user}")
-                print(f"✅ Edit form loaded for user {target_user}")
-                return True
+            try:
+                # Step 1: Open actions dropdown for the specific user row (improved substring matching)
+                logger.debug("Opening actions dropdown")
+                nova.act(
+                    f"In the table, find the row where the Login column contains '{target_user}' as a substring (it may be formatted like 'domain\\{target_user}' or 'prefix\\{target_user}'). Click the 'Select' dropdown button in the Actions column for that specific row."
+                )
+                time.sleep(1)
+                
+                # Step 2: Verify dropdown opened with specific menu items
+                logger.debug("Verifying dropdown menu opened")
+                dropdown_open = nova.act(
+                    "Check if a dropdown menu is now visible showing exactly these three options: 'View details', 'Edit', and 'Manage authentication'",
+                    schema=BOOL_SCHEMA
+                )
+                
+                if not (dropdown_open.matches_schema and dropdown_open.parsed_response):
+                    logger.warning(f"Actions dropdown did not open properly on attempt {attempt}")
+                    # Try to identify what's actually visible for debugging
+                    visible_elements = nova.act("Describe what is currently visible on the screen after attempting to open the dropdown")
+                    logger.debug(f"Current screen state: {visible_elements.response}")
+                    continue
+                
+                # Step 3: Click the Edit option specifically
+                logger.debug("Clicking Edit menu item")
+                nova.act(
+                    "In the opened dropdown menu, click exactly on the 'Edit' option. Do NOT click 'View details' or 'Manage authentication'"
+                )
+                time.sleep(1.5)
+                
+                # Step 4: Verify edit modal/form opened
+                logger.debug("Verifying edit modal opened")
+                edit_loaded = nova.act(
+                    "Check if an edit user modal or form is now displayed. Look for a modal dialog containing user editing fields, tabs like 'General' and 'Roles', or form inputs for user management",
+                    schema=BOOL_SCHEMA
+                )
+                
+                if edit_loaded.matches_schema and edit_loaded.parsed_response:
+                    logger.info(f"Edit form loaded successfully for user: {target_user}")
+                    print(f"✅ Edit form loaded for user {target_user}")
+                    return True
+                else:
+                    logger.warning(f"Edit modal did not open on attempt {attempt}")
+                    
+                    # Additional check: verify we're not still on the user list
+                    still_on_list = nova.act(
+                        "Check if we're still looking at the user management table (with columns ID, Login, Name, etc.)",
+                        schema=BOOL_SCHEMA
+                    )
+                    if still_on_list.matches_schema and still_on_list.parsed_response:
+                        logger.warning("Still on user list - Edit action may not have worked")
+                        # Extract the actual login value for debugging
+                        actual_login = nova.act(f"In the table, find the row containing '{target_user}' and extract the exact text from its Login column")
+                        logger.debug(f"Actual login value found: {actual_login.response}")
+                    
+            except Exception as e:
+                logger.warning(f"Exception on attempt {attempt}: {str(e)}")
+                continue
         
-        logger.error(f"Failed to load edit form for {target_user} after retries")
-        print(f"❌ Failed to load edit form for {target_user} after retries")
+        logger.error(f"Failed to load edit form for {target_user} after {attempt} attempts")
+        print(f"❌ Failed to load edit form for {target_user} after all attempts")
         return False
     
     def change_user_role(self, nova: NovaAct, new_role: str) -> bool:
