@@ -44,6 +44,8 @@ import getpass
 import time
 import json
 import fire
+import logging
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from pathlib import Path
@@ -52,6 +54,31 @@ from pydantic import BaseModel
 
 from nova_act import NovaAct, BOOL_SCHEMA
 from nova_act.types.errors import StartFailed
+
+# Configure logging at the module level
+def setup_logging():
+    """Setup comprehensive logging for the automation following Nova Act best practices"""
+    # Set Nova Act log level to DEBUG (integer value as per Nova Act documentation)
+    os.environ['NOVA_ACT_LOG_LEVEL'] = '10'  # 10=DEBUG, 20=INFO, 30=WARNING, 40=ERROR
+    
+    # Configure Python logging
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(),  # Console output
+            logging.FileHandler(f'csp_automation_{int(time.time())}.log')  # File output
+        ]
+    )
+    
+    # Create logger for this module
+    logger = logging.getLogger(__name__)
+    logger.info("Debug logging enabled for CSP automation")
+    logger.info("Nova Act will generate HTML trace files with step-by-step actions")
+    return logger
+
+# Initialize logging
+logger = setup_logging()
 
 # Import Nova Act configuration
 try:
@@ -102,29 +129,65 @@ class RoleChangeResult(BaseModel):
 class CSPAdminRoleAndBranchChanger:
     """Automate CSP admin role and branch change operations"""
     
-    def __init__(self, csp_admin_url: str, nova_act_api_key: str = None):
+    def __init__(self, csp_admin_url: str, nova_act_api_key: str = None, logs_directory: str = None):
         self.csp_admin_url = csp_admin_url
         self.nova_act_api_key = nova_act_api_key
         self.session_data = {}
         self.results: List[RoleChangeResult] = []
+        
+        # Setup logs directory for Nova Act traces
+        if not logs_directory:
+            self.logs_directory = f"./logs/csp_automation_{int(time.time())}"
+        else:
+            self.logs_directory = logs_directory
+        
+        # Create logs directory
+        Path(self.logs_directory).mkdir(parents=True, exist_ok=True)
+        logger.info(f"Nova Act traces will be saved to: {self.logs_directory}")
+        logger.info("Nova Act will automatically generate:")
+        logger.info("- HTML trace files with step-by-step screenshots")
+        logger.info("- Video recordings of browser sessions (if record_video=True)")
+        logger.info("- Detailed action logs for debugging")
+    
+    def create_nova_act_instance(self, starting_page: str, **kwargs) -> NovaAct:
+        """Create NovaAct instance with debug logging enabled following Nova Act best practices"""
+        logger.debug(f"Creating Nova Act instance for: {starting_page}")
+        logger.debug(f"Logs directory: {self.logs_directory}")
+        
+        return NovaAct(
+            starting_page=starting_page,
+            headless=False,
+            ignore_https_errors=True,
+            nova_act_api_key=self.nova_act_api_key,
+            logs_directory=self.logs_directory,  # Nova Act will create HTML trace files here
+            record_video=True,  # Enable video recording as per Nova Act README
+            **kwargs
+        )
     
     def load_input_config(self, input_file: str) -> InputConfig:
         """Load and validate input configuration from JSON file"""
+        logger.debug(f"Loading input configuration from: {input_file}")
         try:
             input_path = Path(input_file)
             if not input_path.exists():
+                logger.error(f"Input file not found: {input_file}")
                 raise FileNotFoundError(f"Input file not found: {input_file}")
             
+            logger.debug("Reading JSON file")
             with open(input_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
+            logger.debug("Validating configuration structure")
             config = InputConfig.model_validate(data)
+            logger.info(f"Successfully loaded configuration for {len(config.users)} users")
             print(f"✅ Loaded configuration for {len(config.users)} users")
             return config
             
         except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON format in {input_file}: {e}")
             raise ValueError(f"Invalid JSON format in {input_file}: {e}")
         except Exception as e:
+            logger.error(f"Error loading input file {input_file}: {e}")
             raise ValueError(f"Error loading input file {input_file}: {e}")
     
     def save_results(self, output_file: str = None):
@@ -148,117 +211,157 @@ class CSPAdminRoleAndBranchChanger:
     
     def login(self, nova: NovaAct, username: str, password: str) -> bool:
         """Handle admin login process"""
+        logger.debug(f"Starting login process for user: {username}")
         print(f"🔐 Logging into VIB Portal as: {username}")
         
         # Enter username with Unicode encoding for special characters
+        logger.debug("Locating username field")
         nova.act("Find and click the username field")
         # unicode_username = username.encode('unicode_escape').decode('ascii')
         username_field = nova.page.locator('input').first
         username_field.clear()
         username_field.type(username)
+        logger.debug(f"Username entered: {username}")
         
         # Enter password
+        logger.debug("Locating password field")
         nova.act("Find and click the password field")
         nova.page.keyboard.type(password)
+        logger.debug("Password entered")
         
         # Submit login
+        logger.debug("Submitting login form")
         nova.act("Click the purple Enter button to login")
         time.sleep(3)
         
         # Check for successful login by verifying admin interface is displayed
+        logger.debug("Verifying login success")
         admin_interface_displayed = nova.act(
             "Check if the CSP admin interface is successfully displayed - look for the left navigation menu with Administration section, user management table, any admin dashboard elements, or customer service portal page", 
             schema=BOOL_SCHEMA
         )
         
         if admin_interface_displayed.matches_schema and admin_interface_displayed.parsed_response:
+            logger.info("Login successful - admin interface displayed")
             print("✅ Login successful - admin interface displayed!")
             return True
         else:
+            logger.error("Login failed - admin interface not displayed")
             print("❌ Login failed - admin interface not displayed")
             return False
     
     def navigate_to_user_management(self, nova: NovaAct) -> bool:
         """Navigate to user management section"""
+        logger.debug("Starting navigation to user management")
         print("🧭 Navigating to user management...")
         
         # Check if already on users page
+        logger.debug("Checking if already on user management page")
         already_on_users = nova.act("Check if we can see a user management table with columns like ID, Login, Name, Scope", 
                                    schema=BOOL_SCHEMA)
         
         if already_on_users.matches_schema and already_on_users.parsed_response:
+            logger.info("Already on user management page")
             print("✅ Already on user management page")
             return True
         
         # Navigate: Administration → Users
+        logger.debug("Navigating through Administration → Users")
         nova.act("Click on Administration in the left navigation")
         nova.act("Click on Users under Administration")
         time.sleep(2)
         
         # Verify we reached the users page
+        logger.debug("Verifying successful navigation to user management")
         success = nova.act("Check if we can see the user management interface with search fields and user table", 
                           schema=BOOL_SCHEMA)
         
         if success.matches_schema and success.parsed_response:
+            logger.info("Successfully navigated to user management")
             print("✅ Successfully navigated to user management")
             return True
         else:
+            logger.error("Failed to navigate to user management")
             print("❌ Failed to navigate to user management")
             return False
     
     def search_user(self, nova: NovaAct, target_user: str) -> bool:
         """Search for target user and open edit form"""
+        logger.debug(f"Starting user search for: {target_user}")
         print(f"🔍 Searching for user: {target_user}")
         
         # Expand filters if needed and search
+        logger.debug("Expanding search filters")
         nova.act("Click More filters next to the search fields. Stay there. Don't return")
+        logger.debug(f"Entering search term: {target_user}")
         nova.act(f"Enter '{target_user}' in the Login field")
+        logger.debug("Clicking search button")
         nova.act("Click the purple Search button")
         time.sleep(3)
         
         # Check for results
+        logger.debug("Checking for search results")
         no_records = nova.act("Check if 'no records found' or empty table", schema=BOOL_SCHEMA)
         if no_records.matches_schema and no_records.parsed_response:
+            logger.warning(f"No records found for user: {target_user}")
             print(f"❌ No records found for user: {target_user}")
             return False
+        
         # Ensure the specific user row is present before interacting
+        logger.debug(f"Verifying user row exists for: {target_user}")
         row_present = nova.act(
             f"Check that a table row exists where the Login cell text contains '{target_user}' (case-insensitive, substring match acceptable)",
             schema=BOOL_SCHEMA
         )
         if not (row_present.matches_schema and row_present.parsed_response):
+            logger.error(f"Could not uniquely identify row for user: {target_user}")
             print(f"❌ Could not uniquely identify row for user: {target_user}")
             return False
 
         # Attempt to open edit modal robustly (retry once)
         for attempt in range(1, 3):
             if attempt > 1:
+                logger.debug(f"Retrying edit modal open (attempt {attempt})")
                 print("↻ Retrying opening Edit modal")
+            
             # Open actions dropdown for the row containing the target user
+            logger.debug("Opening actions dropdown")
             nova.act(
                 f"Within the table row whose Login cell contains '{target_user}' (substring match), click its Actions dropdown button (labeled 'Select')"
             )
+            
             # Click only the 'Edit' option (avoid View details / Manage authentication)
+            logger.debug("Clicking Edit menu item")
             nova.act(
                 "In the opened dropdown menu, click the menu item whose visible text is exactly 'Edit' (do not click other items)"
             )
             time.sleep(1)
+            
+            logger.debug("Verifying edit modal opened")
             edit_loaded = nova.act(
                 "Check if edit modal displayed (look for modal header or form fields indicating editing user)",
                 schema=BOOL_SCHEMA
             )
             if edit_loaded.matches_schema and edit_loaded.parsed_response:
+                logger.info(f"Edit form loaded successfully for user: {target_user}")
                 print(f"✅ Edit form loaded for user {target_user}")
                 return True
+        
+        logger.error(f"Failed to load edit form for {target_user} after retries")
         print(f"❌ Failed to load edit form for {target_user} after retries")
         return False
     
     def change_user_role(self, nova: NovaAct, new_role: str) -> bool:
         """Change user role using the Roles tab in the Edit user modal"""
+        logger.debug(f"Starting role change to: {new_role}")
         print(f"👤 Changing user role to: {new_role}")
+        
         # Ensure we're on the Roles tab before any checks
+        logger.debug("Ensuring Roles tab is active")
         nova.act("Click on the 'Roles' tab in the Edit user modal (ensure Role field visible)")
+        
         # Capture whether role already matches before overwrite
+        logger.debug(f"Checking if role already matches: {new_role}")
         pre_match = nova.act(
             f"Check if the visible Role input currently shows '{new_role}' exactly (True if matches, False otherwise)",
             schema=BOOL_SCHEMA
@@ -266,24 +369,30 @@ class CSPAdminRoleAndBranchChanger:
         
         # If role already matches, return early without any processing
         if pre_match.matches_schema and pre_match.parsed_response:
+            logger.info(f"Role already set to '{new_role}' - no change needed")
             print(f"ℹ️ Role already set to '{new_role}' - no change needed")
             self.session_data['last_role_change_performed'] = False
             return True
         
         # Composite overwrite without selecting from dropdown suggestions
+        logger.debug(f"Updating role field to: {new_role}")
         nova.act(
             f"If multiple role input fields are present, identify ONLY the one that already displays a non-empty value (current role). Click that populated field once to focus it. Click the option contain '{new_role}' to select it. Do NOT click any second/duplicate/empty role field or placeholder. Without opening a dropdown or clicking any option, select all text in that focused populated field and replace it with '{new_role}'. Do NOT click any 'Select role' option or any list item. Do NOT click any 'Close' button."
         )
 
         # Verify field text now shows desired value
+        logger.debug("Verifying role field update")
         role_ok = nova.act(
             f"Confirm the role input now exactly shows '{new_role}' (case-insensitive match acceptable). Return True if so.",
             schema=BOOL_SCHEMA
         )
         if role_ok.matches_schema and role_ok.parsed_response:
+            logger.info(f"Role successfully updated to: {new_role}")
             print(f"✅ Role updated to: {new_role}")
             self.session_data['last_role_change_performed'] = True
             return True
+        
+        logger.error(f"Failed to set role to: {new_role} (post-verify mismatch)")
         print(f"❌ Failed to set role to: {new_role} (post-verify mismatch)")
         self.session_data['last_role_change_performed'] = False
         return False
@@ -581,9 +690,13 @@ class CSPAdminRoleAndBranchChanger:
         - If only role: change role then save if changed.
         - If branch_hierarchy is provided, use hierarchical navigation instead of simple branch change.
         """
+        logger.info(f"Starting processing for user: {user_request.target_user}")
         print(f"\n👤 Processing user: {user_request.target_user}")
+        
         try:
+            logger.debug(f"Searching for user: {user_request.target_user}")
             if not self.search_user(nova, user_request.target_user):
+                logger.error(f"User not found: {user_request.target_user}")
                 self.results.append(RoleChangeResult(
                     user_email=user_request.target_user,
                     new_role=user_request.new_role or "unchanged",
@@ -597,12 +710,18 @@ class CSPAdminRoleAndBranchChanger:
             role_requested = bool(user_request.new_role)
             branch_requested = bool(user_request.new_branch) or bool(user_request.branch_hierarchy)
             use_hierarchy = bool(user_request.branch_hierarchy)
+            
+            logger.debug(f"Change requests - Role: {role_requested}, Branch: {branch_requested}, Hierarchy: {use_hierarchy}")
 
             # Both role and branch (single save)
             if role_requested and branch_requested:
+                logger.info("Processing both role and branch changes")
+                
                 # Change bank user first (if using hierarchy)
                 if use_hierarchy:
+                    logger.debug("Changing bank user using hierarchy")
                     if not self.change_bank_user_hierarchical(nova, user_request.branch_hierarchy):
+                        logger.error("Bank user change failed")
                         self.results.append(RoleChangeResult(
                             user_email=user_request.target_user,
                             new_role=user_request.new_role,
@@ -612,7 +731,9 @@ class CSPAdminRoleAndBranchChanger:
                         ))
                         return False
                 
+                logger.debug(f"Changing role to: {user_request.new_role}")
                 if not self.change_user_role(nova, user_request.new_role):
+                    logger.error("Role change failed")
                     self.results.append(RoleChangeResult(
                         user_email=user_request.target_user,
                         new_role=user_request.new_role,
@@ -621,15 +742,20 @@ class CSPAdminRoleAndBranchChanger:
                         timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
                     ))
                     return False
+                
                 role_changed = self.session_data.get('last_role_change_performed', False)
+                logger.debug(f"Role change performed: {role_changed}")
                 
                 # Use hierarchical or simple branch change
                 if use_hierarchy:
+                    logger.debug("Using hierarchical branch change")
                     branch_success = self.change_user_branch_hierarchical(nova, user_request.branch_hierarchy, auto_save=False)
                 else:
+                    logger.debug("Using simple branch change")
                     branch_success = self.change_user_branch(nova, user_request.new_branch, auto_save=False)
                 
                 if not branch_success:
+                    logger.error("Branch change failed")
                     self.results.append(RoleChangeResult(
                         user_email=user_request.target_user,
                         new_role=user_request.new_role or "unchanged",
@@ -641,10 +767,13 @@ class CSPAdminRoleAndBranchChanger:
                 
                 branch_changed = self.session_data.get('last_branch_change_performed', False)
                 bank_user_changed = self.session_data.get('last_bank_user_change_performed', False)
+                logger.debug(f"Changes - Branch: {branch_changed}, Bank user: {bank_user_changed}")
                 
                 # Only save if there were actual changes
                 if role_changed or branch_changed or bank_user_changed:
+                    logger.debug("Saving changes")
                     if not self.save_changes(nova):
+                        logger.error("Save failed")
                         self.results.append(RoleChangeResult(
                             user_email=user_request.target_user,
                             new_role=user_request.new_role or "unchanged",
@@ -654,12 +783,15 @@ class CSPAdminRoleAndBranchChanger:
                         ))
                         return False
                 else:
+                    logger.info("No changes needed - all fields already set correctly")
                     print("ℹ️ No changes needed - all fields already set correctly")
                     # Close the edit modal since no changes were made
                     nova.act("Close the edit modal by clicking Cancel, X button, or clicking outside the modal")
                         
             elif role_requested:
+                logger.info("Processing role change only")
                 if not self.change_user_role(nova, user_request.new_role):
+                    logger.error("Role change failed")
                     self.results.append(RoleChangeResult(
                         user_email=user_request.target_user,
                         new_role=user_request.new_role,
@@ -671,7 +803,9 @@ class CSPAdminRoleAndBranchChanger:
                 
                 # Only save if there was an actual role change
                 if self.session_data.get('last_role_change_performed'):
+                    logger.debug("Saving role changes")
                     if not self.save_changes(nova):
+                        logger.error("Save failed after role change")
                         self.results.append(RoleChangeResult(
                             user_email=user_request.target_user,
                             new_role=user_request.new_role or "unchanged",
@@ -681,12 +815,16 @@ class CSPAdminRoleAndBranchChanger:
                         ))
                         return False
                 else:
+                    logger.info("No changes needed - role already set correctly")
                     print("ℹ️ No changes needed - role already set correctly")
                         
             elif branch_requested:
+                logger.info("Processing branch change only")
                 # Change bank user first (if using hierarchy)
                 if use_hierarchy:
+                    logger.debug("Changing bank user using hierarchy")
                     if not self.change_bank_user_hierarchical(nova, user_request.branch_hierarchy):
+                        logger.error("Bank user change failed")
                         self.results.append(RoleChangeResult(
                             user_email=user_request.target_user,
                             new_role=user_request.new_role or "unchanged",
@@ -698,11 +836,14 @@ class CSPAdminRoleAndBranchChanger:
                 
                 # Use hierarchical or simple branch change with auto_save=True
                 if use_hierarchy:
+                    logger.debug("Using hierarchical branch change with auto-save")
                     branch_success = self.change_user_branch_hierarchical(nova, user_request.branch_hierarchy, auto_save=True)
                 else:
+                    logger.debug("Using simple branch change with auto-save")
                     branch_success = self.change_user_branch(nova, user_request.new_branch, auto_save=True)
                 
                 if not branch_success:
+                    logger.error("Branch change failed")
                     self.results.append(RoleChangeResult(
                         user_email=user_request.target_user,
                         new_role=user_request.new_role or "unchanged",
@@ -715,10 +856,13 @@ class CSPAdminRoleAndBranchChanger:
                 # Check if changes were actually performed
                 branch_changed = self.session_data.get('last_branch_change_performed', False)
                 bank_user_changed = self.session_data.get('last_bank_user_change_performed', False)
+                logger.debug(f"Branch change performed: {branch_changed}, Bank user change performed: {bank_user_changed}")
                 
                 if not branch_changed and not bank_user_changed:
+                    logger.info("No changes needed - branch and bank user already set correctly")
                     print("ℹ️ No changes needed - branch and bank user already set correctly")
             else:
+                logger.info("No changes requested (neither role nor branch)")
                 print("ℹ️ No changes requested (neither role nor branch)")
 
             # Determine the effective new branch for logging
@@ -759,6 +903,7 @@ class CSPAdminRoleAndBranchChanger:
             else:
                 status = "success - no changes requested"
 
+            logger.info(f"User processing completed with status: {status}")
             self.results.append(RoleChangeResult(
                 user_email=user_request.target_user,
                 new_role=user_request.new_role or "unchanged",
@@ -770,6 +915,7 @@ class CSPAdminRoleAndBranchChanger:
             return True
 
         except Exception as e:
+            logger.exception(f"Error processing user {user_request.target_user}: {e}")
             print(f"❌ Error processing {user_request.target_user}: {e}")
             self.results.append(RoleChangeResult(
                 user_email=user_request.target_user,
@@ -786,10 +932,15 @@ class CSPAdminRoleAndBranchChanger:
         If per_user_session is True, launches a fresh browser session per user to isolate state.
         Returns True only if all user operations succeed.
         """
+        logger.info(f"Starting batch processing from file: {input_file}")
+        logger.debug(f"Parameters - per_user_session: {per_user_session}, parallel_workers: {parallel_workers}, start_retries: {start_retries}")
+        
         # Load configuration
         try:
             config = self.load_input_config(input_file)
+            logger.info(f"Loaded configuration for {len(config.users)} users")
         except Exception as e:
+            logger.error(f"Configuration error: {e}")
             print(f"❌ Configuration error: {e}")
             return False
 
@@ -802,17 +953,18 @@ class CSPAdminRoleAndBranchChanger:
 
         # Parallel isolated mode
         if per_user_session and parallel_workers and parallel_workers > 1:
+            logger.info(f"Using parallel mode with {parallel_workers} workers (isolated sessions)")
             print(f"⚙️ Parallel mode: {parallel_workers} workers (isolated sessions)")
             lock = threading.Lock()
 
             def worker(user_request: UserChangeRequest) -> RoleChangeResult:
-                local_changer = CSPAdminRoleAndBranchChanger("", self.nova_act_api_key)  # independent session data
+                local_changer = CSPAdminRoleAndBranchChanger("", self.nova_act_api_key, self.logs_directory)  # independent session data
                 for attempt in range(1, start_retries + 1):
                     try:
-                        with NovaAct(starting_page=config.admin_credentials.csp_admin_url,
-                                     headless=False, ignore_https_errors=True, 
-                                     nova_act_api_key=local_changer.nova_act_api_key) as nova:
+                        logger.debug(f"Worker starting session attempt {attempt} for user: {user_request.target_user}")
+                        with local_changer.create_nova_act_instance(config.admin_credentials.csp_admin_url) as nova:
                             if not local_changer.login(nova, config.admin_credentials.username, admin_password):
+                                logger.error(f"Worker login failed for user: {user_request.target_user}")
                                 return RoleChangeResult(
                                     user_email=user_request.target_user,
                                     new_role=user_request.new_role or "unchanged",
@@ -821,6 +973,7 @@ class CSPAdminRoleAndBranchChanger:
                                     timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
                                 )
                             if not local_changer.navigate_to_user_management(nova):
+                                logger.error(f"Worker navigation failed for user: {user_request.target_user}")
                                 return RoleChangeResult(
                                     user_email=user_request.target_user,
                                     new_role=user_request.new_role or "unchanged",
@@ -831,10 +984,12 @@ class CSPAdminRoleAndBranchChanger:
                             local_changer.process_single_user(nova, user_request)
                             return local_changer.results[-1]
                     except StartFailed as sf:
+                        logger.warning(f"StartFailed (attempt {attempt}/{start_retries}) for {user_request.target_user}: {sf}")
                         print(f"⚠️ StartFailed (attempt {attempt}/{start_retries}) for {user_request.target_user}: {sf}")
                         if attempt < start_retries:
                             time.sleep(2 * attempt)
                             continue
+                        logger.error(f"StartFailed - all retries exhausted for {user_request.target_user}")
                         return RoleChangeResult(
                             user_email=user_request.target_user,
                             new_role=user_request.new_role or "unchanged",
@@ -843,6 +998,7 @@ class CSPAdminRoleAndBranchChanger:
                             timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
                         )
                     except Exception as e:
+                        logger.exception(f"Worker session error for {user_request.target_user}: {e}")
                         return RoleChangeResult(
                             user_email=user_request.target_user,
                             new_role=user_request.new_role or "unchanged",
@@ -860,6 +1016,7 @@ class CSPAdminRoleAndBranchChanger:
                         if result_obj.status.startswith("success"):
                             success_count += 1
             total_users = len(config.users)
+            logger.info(f"Parallel batch completed - Success: {success_count}/{total_users}")
             print(f"\n📊 Parallel Batch Summary:")
             print(f"   Total users: {total_users}")
             print(f"   Successful: {success_count}")
@@ -870,16 +1027,19 @@ class CSPAdminRoleAndBranchChanger:
             return success_count == total_users
 
         if per_user_session:
+            logger.info("Using isolated browser session per user")
             print("🔁 Using isolated browser session per user")
             for user_request in config.users:
                 session_started = False
                 for attempt in range(1, start_retries + 1):
                     try:
-                        with NovaAct(starting_page=config.admin_credentials.csp_admin_url,
-                                     headless=False, ignore_https_errors=True, 
-                                     nova_act_api_key=self.nova_act_api_key) as nova:
+                        logger.debug(f"Starting session attempt {attempt} for user: {user_request.target_user}")
+                        with self.create_nova_act_instance(config.admin_credentials.csp_admin_url) as nova:
                             session_started = True
+                            logger.debug("Nova Act session started successfully")
+                            
                             if not self.login(nova, config.admin_credentials.username, admin_password):
+                                logger.error("Login failed")
                                 self.results.append(RoleChangeResult(
                                     user_email=user_request.target_user,
                                     new_role=user_request.new_role or "unchanged",
@@ -888,7 +1048,9 @@ class CSPAdminRoleAndBranchChanger:
                                     timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
                                 ))
                                 break
+                            
                             if not self.navigate_to_user_management(nova):
+                                logger.error("Navigation to user management failed")
                                 self.results.append(RoleChangeResult(
                                     user_email=user_request.target_user,
                                     new_role=user_request.new_role or "unchanged",
@@ -897,14 +1059,18 @@ class CSPAdminRoleAndBranchChanger:
                                     timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
                                 ))
                                 break
+                            
                             if self.process_single_user(nova, user_request):
                                 success_count += 1
+                                logger.info(f"Successfully processed user: {user_request.target_user}")
                             break
                     except StartFailed as sf:
+                        logger.warning(f"StartFailed (attempt {attempt}/{start_retries}) for {user_request.target_user}: {sf}")
                         print(f"⚠️ StartFailed (attempt {attempt}/{start_retries}) for {user_request.target_user}: {sf}")
                         if attempt < start_retries:
                             time.sleep(2 * attempt)
                             continue
+                        logger.error(f"StartFailed - all retries exhausted for {user_request.target_user}")
                         self.results.append(RoleChangeResult(
                             user_email=user_request.target_user,
                             new_role=user_request.new_role or "unchanged",
@@ -913,6 +1079,7 @@ class CSPAdminRoleAndBranchChanger:
                             timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
                         ))
                     except Exception as e:
+                        logger.exception(f"Session error for {user_request.target_user}: {e}")
                         print(f"❌ Session error for {user_request.target_user}: {e}")
                         self.results.append(RoleChangeResult(
                             user_email=user_request.target_user,
@@ -924,24 +1091,28 @@ class CSPAdminRoleAndBranchChanger:
                         break
                 time.sleep(1)  # polite gap between sessions
         else:
-            with NovaAct(starting_page=config.admin_credentials.csp_admin_url,
-                         headless=False, ignore_https_errors=True, 
-                         nova_act_api_key=self.nova_act_api_key) as nova:
+            logger.info("Using single browser session for all users")
+            with self.create_nova_act_instance(config.admin_credentials.csp_admin_url) as nova:
                 try:
                     if not self.login(nova, config.admin_credentials.username, admin_password):
+                        logger.error("Initial login failed")
                         self.save_results()
                         return False
                     if not self.navigate_to_user_management(nova):
+                        logger.error("Initial navigation failed")
                         self.save_results()
                         return False
                     for user_request in config.users:
                         if self.process_single_user(nova, user_request):
                             success_count += 1
+                            logger.info(f"Successfully processed user: {user_request.target_user}")
                         time.sleep(1)
                 except Exception as e:
+                    logger.exception(f"Batch processing error: {e}")
                     print(f"❌ Batch processing error: {e}")
 
         total_users = len(config.users)
+        logger.info(f"Batch processing completed. Success rate: {(success_count/total_users)*100:.1f}%")
         print(f"\n📊 Batch Processing Summary:")
         print(f"   Total users: {total_users}")
         print(f"   Successful: {success_count}")
@@ -994,7 +1165,8 @@ def main(
     per_user_session: bool = True,
     parallel_workers: int = 0,
     start_retries: int = 2,
-    nova_act_api_key: str = None
+    nova_act_api_key: str = None,
+    logs_directory: str = None
 ):
     """
     Execute CSP admin role and branch change automation from JSON input file.
@@ -1004,14 +1176,19 @@ def main(
         password: Admin password (will prompt if not provided)
         per_user_session: Launch a new browser session per user for isolation (default True)
         nova_act_api_key: Nova Act API key (if not provided, will use environment variable)
+        logs_directory: Directory to save Nova Act traces and logs
     """
     
+    logger.info("CSP Admin Role and Branch Change Automation starting")
+    
     if not input_file:
+        logger.error("No input file provided")
         print("Error: Please provide an input file")
         print("Usage: python -m nova_act.samples.vib_csp_automation.csp_admin_change_role_and_branch --input_file input.json")
         return
     
     if not Path(input_file).exists():
+        logger.error(f"Input file not found: {input_file}")
         print(f"Error: Input file not found: {input_file}")
         print("You can create a sample input file using the create_sample_input_file() function")
         return
@@ -1020,8 +1197,10 @@ def main(
     if not nova_act_api_key:
         try:
             nova_act_api_key = get_nova_act_api_key()
+            logger.info("Using Nova Act API key from configuration")
             print("✅ Using Nova Act API key from configuration")
         except Exception as e:
+            logger.error(f"Error getting Nova Act API key: {e}")
             print(f"❌ Error getting Nova Act API key: {e}")
             return
     
@@ -1030,12 +1209,14 @@ def main(
     print("=" * 50)
     
     # Create and run the automation
-    changer = CSPAdminRoleAndBranchChanger("", nova_act_api_key)  # URL will be loaded from config
+    changer = CSPAdminRoleAndBranchChanger("", nova_act_api_key, logs_directory)  # URL will be loaded from config
     success = changer.run_batch(input_file, password, per_user_session=per_user_session, parallel_workers=parallel_workers, start_retries=start_retries)
     
     if success:
+        logger.info("All users processed successfully")
         print("\n✅ All users processed successfully!")
     else:
+        logger.warning("Some users failed to process")
         print("\n⚠️ Some users failed to process. Check results file for details.")
 
 
