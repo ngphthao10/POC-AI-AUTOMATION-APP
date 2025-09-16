@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Ứng dụng Tự động hóa AI
-Ứng dụng tự động hóa dựa trên console với nhiều tiện ích khác nhau
+Ứng dụng tự động hóa dựa trên console với chế độ single worker để đảm bảo tính ổn định
 """
 
 import sys
@@ -154,7 +154,7 @@ def demo_automation_run():
                 print(f"   {i}. {target_user} | Chi nhánh: {branch_code} | Vai trò: {new_role}")
         
         # Xác nhận
-        print(f"\n⚠️  Sẽ thực hiện tự động hóa trình duyệt thực tế")
+        print(f"\n⚠️  Sẽ thực hiện tự động hóa trình duyệt thực tế với single worker (an toàn và ổn định)")
         confirm = input("Tiếp tục? (y/N): ").strip().lower()
         
         if confirm in ['y', 'yes', 'c', 'có']:
@@ -192,23 +192,15 @@ def run_actual_csp_automation(input_file: str):
         
         changer = CSPAdminRoleAndBranchChanger("", api_key)
         
-        # Cấu hình worker
-        parallel_workers = 2
-        try:
-            workers_input = input("Số worker song song (1-4, mặc định=2): ").strip()
-            if workers_input:
-                parallel_workers = max(1, min(4, int(workers_input)))
-        except ValueError:
-            parallel_workers = 2
-        
-        print(f"🔧 Worker: {parallel_workers}")
+        # Cấu hình cho single worker (không song song)
+        print(f"🔧 Worker: 1 (single worker mode)")
         print("=" * 40)
         
-        # Chạy tự động hóa
+        # Chạy tự động hóa với single worker
         success = changer.run_batch(
             input_file=input_file,
             per_user_session=True,
-            parallel_workers=parallel_workers if parallel_workers > 1 else None
+            parallel_workers=None  # Force single worker mode
         )
         
         print("=" * 40)

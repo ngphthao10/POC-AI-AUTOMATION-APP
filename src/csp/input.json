@@ -1,14 +1,15 @@
 {
   "admin_credentials": {
-    "username": "north\\chi.dth",
-    "password": "Muadong2025*",
-    "csp_admin_url": "https://svcms.vib/branchgui-web-client/portal/users/list"
+    "username": "mb\\nghia.ht.dev",
+    "password": "VIB@vib#21",
+    "csp_admin_url": "https://10.50.142.37:7051/branchgui-web-client/portal/users/list"
   },
   "users": [
     {
-      "target_user": "hang.ngothanh",
+      "target_user": "anh.vutu",
       "new_role": "CSP_Inquiry",
-      "branch_hierarchy": null
+      "branch_hierarchy": ["VIB Bank", "South", "412"]
     }
   ]
 }
+

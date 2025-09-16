@@ -248,7 +248,11 @@ with NovaAct(starting_page="https://www.amazon.com") as nova:
 
 ### Running multiple sessions in parallel
 
-One `NovaAct` instance can only actuate one browser at a time. However, it is possible to actuate multiple browsers concurrently with multiple `NovaAct` instances! They are quite lightweight. You can use this to parallelize parts of your task, creating a kind of browser use map-reduce for the internet. The following will search for books in parallel across different browser instances. Note, the below code builds on the books sample in the previous "Extracting information from a web page" section.
+One `NovaAct` instance can only actuate one browser at a time. However, it is possible to actuate multiple browsers concurrently with multiple `NovaAct` instances! They are quite lightweight. You can use this to parallelize parts of your task, creating a kind of browser use map-reduce for the internet. 
+
+**Note**: This automation app has been configured for single worker mode to ensure stability and reliability. While the Nova Act SDK supports parallel execution, the console application runs with sequential processing for optimal performance and to avoid potential issues with concurrent browser sessions.
+
+The following example shows how parallel execution would work with Nova Act SDK directly (not applicable to this console application which uses single worker mode):
 
 Using the `get_books` example above:
 

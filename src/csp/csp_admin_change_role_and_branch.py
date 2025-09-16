@@ -2,13 +2,13 @@
 CSP Admin Change Role and Branch Automation
 
 This automation handles the process of changing user roles and branch assignments 
-in CSP web applications for IT support teams. It supports both simple branch changes
-and hierarchical branch navigation.
+in CSP web applications for IT support teams using hierarchical branch navigation.
 
 Usage:
-python -m src.csp.csp_admin_change_role_and_branch --input_file src/csp/input.json [--per_user_session False] [--parallel_workers 4]
+python -m src.csp.csp_admin_change_role_and_branch --input_file src/csp/input.json [--per_user_session False]
 
-Note: per_user_session defaults to True (isolation ON). Pass --per_user_session False to reuse a single browser session.
+Note: The app now runs in single worker mode by default for improved stability and reliability.
+Previous parallel worker support has been removed to prevent potential issues with concurrent browser sessions.
 
 Input JSON format:
 {
@@ -21,22 +21,22 @@ Input JSON format:
         {
             "target_user": "user1@example.com",
             "new_role": "manager",
-            "new_branch": "branch_001"
+            "branch_hierarchy": ["VIB Bank", "North", "001_HA NOI"]
         },
         {
             "target_user": "user2@example.com", 
             "new_role": "employee",
-            "new_branch": "branch_002",
-            "branch_hierarchy": ["VIB Bank", "North", "002_HA NOI"]
+            "branch_hierarchy": ["VIB Bank", "South", "002_HO CHI MINH"]
         }
     ]
 }
 
 Branch Hierarchy Support:
-- If 'branch_hierarchy' is provided, the automation will navigate through the hierarchical path step by step
+- The automation uses hierarchical navigation for all branch changes
+- 'branch_hierarchy' should be provided as an array representing the hierarchical path
 - Each element in the array represents a level in the hierarchy (e.g., Bank → Region → Branch)
 - The final element in the hierarchy is considered the target branch
-- If 'branch_hierarchy' is provided, 'new_branch' can be omitted or will be ignored
+- For backward compatibility, 'new_branch' can still be used, but it will be converted to a default hierarchy
 - This supports complex organizational structures where branches are nested under regions or departments
 """
 
@@ -46,8 +46,6 @@ import json
 import fire
 import logging
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import threading
 from pathlib import Path
 from typing import Optional, List, Dict
 from pydantic import BaseModel
@@ -148,6 +146,50 @@ class CSPAdminRoleAndBranchChanger:
         logger.info("- HTML trace files with step-by-step screenshots")
         logger.info("- Video recordings of browser sessions (if record_video=True)")
         logger.info("- Detailed action logs for debugging")
+    
+    def wait_for_loading_complete(self, nova: NovaAct, timeout_seconds: int = 60, action_description: str = "page to load") -> bool:
+        """
+        Wait for loading indicators to disappear with timeout handling.
+        This method only observes the page state and does NOT perform any clicks or actions.
+        
+        Args:
+            nova: NovaAct instance
+            timeout_seconds: Maximum time to wait for loading to complete (default 60 seconds)
+            action_description: Description of what we're waiting for (for logging)
+            
+        Returns:
+            bool: True if loading completed within timeout, False if timeout occurred
+        """
+        start_time = time.time()
+        logger.debug(f"Waiting for {action_description} (timeout: {timeout_seconds}s)")
+        print(f"⏳ Waiting for {action_description}...")
+        
+        while time.time() - start_time < timeout_seconds:
+            # Check for common loading indicators - OBSERVATION ONLY, NO ACTIONS
+            is_loading = nova.act(
+                "OBSERVE ONLY: Check if there are any loading indicators currently visible on the page: loading spinner, 'Loading...' text, progress bars, or modal dialogs with spinning wheels. Return True if any loading indicators are visible, False if page appears fully loaded. DO NOT click anything.",
+                schema=BOOL_SCHEMA
+            )
+            
+            if is_loading.matches_schema and not is_loading.parsed_response:
+                # No loading indicators found - page is ready
+                elapsed = time.time() - start_time
+                logger.debug(f"Loading completed after {elapsed:.1f} seconds")
+                print(f"✅ {action_description.title()} completed ({elapsed:.1f}s)")
+                return True
+            
+            # Brief pause before checking again
+            time.sleep(2)
+            elapsed = time.time() - start_time
+            if elapsed % 10 == 0:  # Log progress every 10 seconds
+                logger.debug(f"Still waiting for {action_description} ({elapsed:.0f}s elapsed)")
+                print(f"⏳ Still waiting for {action_description} ({elapsed:.0f}s elapsed)")
+        
+        # Timeout occurred
+        elapsed = time.time() - start_time
+        logger.error(f"Timeout waiting for {action_description} after {elapsed:.1f} seconds")
+        print(f"❌ Timeout: {action_description} did not complete within {timeout_seconds} seconds")
+        return False
     
     def create_nova_act_instance(self, starting_page: str, **kwargs) -> NovaAct:
         """Create NovaAct instance with debug logging enabled following Nova Act best practices"""
@@ -338,7 +380,12 @@ class CSPAdminRoleAndBranchChanger:
         # Step 4: Perform search
         logger.debug("Performing search")
         nova.act("Click the purple 'Search' button to execute the search")
-        time.sleep(3)
+        
+        # Wait for search results to load
+        if not self.wait_for_loading_complete(nova, timeout_seconds=60, action_description="search results to load"):
+            logger.error("Search operation timeout")
+            print("❌ Search operation timeout")
+            return False
         
         # Step 5: Verify search was executed and check results
         logger.debug("Verifying search execution and checking for results")
@@ -433,9 +480,16 @@ class CSPAdminRoleAndBranchChanger:
                 )
                 
                 if edit_loaded.matches_schema and edit_loaded.parsed_response:
-                    logger.info(f"Edit form loaded successfully for user: {target_user}")
-                    print(f"✅ Edit form loaded for user {target_user}")
-                    return True
+                    logger.debug("Edit modal opened, waiting for loading to complete")
+                    # Wait for any loading indicators to disappear
+                    if self.wait_for_loading_complete(nova, timeout_seconds=60, action_description="edit modal to fully load"):
+                        logger.info(f"Edit form loaded successfully for user: {target_user}")
+                        print(f"✅ Edit form loaded for user {target_user}")
+                        return True
+                    else:
+                        logger.error(f"Edit modal loading timeout for user: {target_user}")
+                        print(f"❌ Edit modal loading timeout for user: {target_user}")
+                        return False
                 else:
                     logger.warning(f"Edit modal did not open on attempt {attempt}")
                     
@@ -463,264 +517,323 @@ class CSPAdminRoleAndBranchChanger:
         logger.debug(f"Starting role change to: {new_role}")
         print(f"👤 Changing user role to: {new_role}")
         
-        # Ensure we're on the Roles tab before any checks
-        logger.debug("Ensuring Roles tab is active")
-        nova.act("Click on the 'Roles' tab in the Edit user modal (ensure Role field visible)")
+        # Step 1: Navigate to Roles tab (modal opens on Person tab by default)
+        logger.debug("Navigating to Roles tab")
+        nova.act("In the Edit user modal, click on the 'Roles' tab to switch from the default Person tab")
+        time.sleep(1)
         
-        # Capture whether role already matches before overwrite
-        logger.debug(f"Checking if role already matches: {new_role}")
-        pre_match = nova.act(
-            f"Check if the visible Role input currently shows '{new_role}' exactly (True if matches, False otherwise)",
+        # Step 2: Verify we're on the Roles tab
+        logger.debug("Verifying Roles tab is active")
+        on_roles_tab = nova.act(
+            "Check if the 'Roles' tab is currently active/highlighted and role-related fields (Role, Scope, User category) are visible",
             schema=BOOL_SCHEMA
         )
         
-        # If role already matches, return early without any processing
+        if not (on_roles_tab.matches_schema and on_roles_tab.parsed_response):
+            logger.error("Failed to navigate to Roles tab")
+            print("❌ Failed to navigate to Roles tab")
+            return False
+        
+        logger.debug("Successfully on Roles tab")
+        print("✅ Successfully navigated to Roles tab")
+        
+        # Step 3: Check if role already matches
+        logger.debug(f"Checking if role already matches: {new_role}")
+        pre_match = nova.act(
+            f"Look at the Role field (not the 'Select role...' dropdown) and check if it currently shows '{new_role}' exactly",
+            schema=BOOL_SCHEMA
+        )
+        
+        # If role already matches, return early
         if pre_match.matches_schema and pre_match.parsed_response:
             logger.info(f"Role already set to '{new_role}' - no change needed")
             print(f"ℹ️ Role already set to '{new_role}' - no change needed")
             self.session_data['last_role_change_performed'] = False
             return True
         
-        # Composite overwrite without selecting from dropdown suggestions
+        # Step 4: Clear existing role and set new role
         logger.debug(f"Updating role field to: {new_role}")
-        nova.act(
-            f"If multiple role input fields are present, identify ONLY the one that already displays a non-empty value (current role). Click that populated field once to focus it. Click the option contain '{new_role}' to select it. Do NOT click any second/duplicate/empty role field or placeholder. Without opening a dropdown or clicking any option, select all text in that focused populated field and replace it with '{new_role}'. Do NOT click any 'Select role' option or any list item. Do NOT click any 'Close' button."
-        )
-
-        # Verify field text now shows desired value
-        logger.debug("Verifying role field update")
-        role_ok = nova.act(
-            f"Confirm the role input now exactly shows '{new_role}' (case-insensitive match acceptable). Return True if so.",
+        nova.act("Click the X button next to the current role to clear it")
+        time.sleep(0.5)
+        
+        # Step 5: Use the 'Select role...' dropdown to search and choose new role
+        nova.act("Click on the 'Select role...' dropdown to open the role selection list")
+        time.sleep(1)
+        
+        # Use search functionality in the dropdown and click the result to populate
+        nova.act(f"Click on the 'Select role...' input field and type '{new_role}' to search for the role. Then click on the '{new_role}' option that appears in the filtered dropdown results to populate the role field")
+        time.sleep(2)  # Allow time for the selection to populate
+        
+        # Verify the role was populated in the dropdown
+        role_populated = nova.act(
+            f"Check if the role dropdown now shows '{new_role}' as the selected value (not just in the search results)",
             schema=BOOL_SCHEMA
         )
+        
+        if not (role_populated.matches_schema and role_populated.parsed_response):
+            # Try alternative approach - search and then explicitly click the result
+            logger.warning(f"Role '{new_role}' may not have been populated, trying alternative selection")
+            nova.act(f"In the role dropdown, find and click on the '{new_role}' option from the search results to select and populate it")
+            time.sleep(1)
+            
+            # Verify again
+            role_populated_retry = nova.act(
+                f"Check if the role dropdown now shows '{new_role}' as the selected value",
+                schema=BOOL_SCHEMA
+            )
+            
+            if not (role_populated_retry.matches_schema and role_populated_retry.parsed_response):
+                logger.error(f"Role '{new_role}' could not be selected and populated")
+                print(f"❌ Role '{new_role}' could not be selected and populated")
+                return False
+        
+        # Step 6: Verify the role was set correctly
+        logger.debug("Verifying role field update")
+        role_ok = nova.act(
+            f"Check if the Role field now displays '{new_role}' as the selected value (not just in the dropdown search). Look for the role name showing as the current selection in the Role field.",
+            schema=BOOL_SCHEMA
+        )
+        
         if role_ok.matches_schema and role_ok.parsed_response:
             logger.info(f"Role successfully updated to: {new_role}")
             print(f"✅ Role updated to: {new_role}")
             self.session_data['last_role_change_performed'] = True
             return True
-        
-        logger.error(f"Failed to set role to: {new_role} (post-verify mismatch)")
-        print(f"❌ Failed to set role to: {new_role} (post-verify mismatch)")
-        self.session_data['last_role_change_performed'] = False
-        return False
+        else:
+            logger.error(f"Failed to set role to: {new_role} (verification failed)")
+            print(f"❌ Failed to set role to: {new_role} (verification failed)")
+            self.session_data['last_role_change_performed'] = False
+            return False
     
     def change_user_branch_hierarchical(self, nova: NovaAct, branch_hierarchy: List[str], auto_save: bool = True) -> bool:
         """Change user branch using hierarchical navigation through branch_hierarchy.
         
+        This method performs TWO major steps within the Roles tab:
+        1. Change Bank user using hierarchical navigation (save & close)
+        2. Change Scope using hierarchical navigation (save & close)
+        
         Args:
             nova: NovaAct instance
             branch_hierarchy: List of hierarchical levels to navigate (e.g., ["VIB Bank", "North", "003"])
-            auto_save: Whether to automatically save changes after selection
+            auto_save: Whether to automatically save changes after each step
             
         Returns:
-            bool: True if branch was successfully changed, False otherwise
+            bool: True if both bank user and scope were successfully changed, False otherwise
         """
         if not branch_hierarchy or len(branch_hierarchy) == 0:
             print("❌ Empty branch hierarchy provided")
             return False
             
         final_branch = branch_hierarchy[-1]  # Last element is the target branch
-        print(f"🏢 Changing user branch using hierarchical path: {' → '.join(branch_hierarchy)}")
+        print(f"🏢 Changing user branch using hierarchical path (2-step process): {' → '.join(branch_hierarchy)}")
         
         # Always ensure Roles tab active first (explicit, idempotent)
-        nova.act("Click (or re-click) the 'Roles' tab in the Edit user modal to ensure it is active before inspecting scope inputs")
+        nova.act("Click (or re-click) the 'Roles' tab in the Edit user modal to ensure it is active before starting the 2-step branch change process")
         
-        # Composite pre-check without opening panel - check if final branch already present
-        pre_token = nova.act(
-            f"Just read the current Scope textbox (no clicks) and return True if it already CONTAINS '{final_branch}' (substring acceptable).", 
+        # =================================================================
+        # STEP 1: Change Bank User using hierarchical navigation
+        # =================================================================
+        print("🏦 STEP 1: Changing Bank User using hierarchical navigation...")
+        
+        # Initialize step tracking variables
+        bank_user_needs_update = False
+        scope_needs_update = False
+        
+        # Check if bank user already contains target branch
+        bank_user_pre_check = nova.act(
+            f"IMPORTANT: Look ONLY at the Bank user field (NOT the Scope field or any other field). Read the exact text content of the Bank user textbox. Return True ONLY if the Bank user field's text content contains '{final_branch}' as a substring. If the Bank user field does not contain '{final_branch}', return False. Ignore all other fields like Scope, Role, etc.", 
             schema=BOOL_SCHEMA
         )
-        if pre_token.matches_schema and pre_token.parsed_response:
-            print(f"ℹ️ Branch already contains target token '{final_branch}'; skipping")
-            self.session_data['last_branch_change_performed'] = False
-            return True
         
-        # Step 1: Open scope selector panel
-        print("🔍 Opening scope selection panel...")
-        nova.act("Ensure 'Roles' tab is active, then click the FIRST non-empty scope input (not the empty placeholder) to open the scope selection panel")
-        
-        # Step 2: Navigate through hierarchy levels step by step
-        for i, level in enumerate(branch_hierarchy):
-            print(f"📍 Navigating to level {i+1}/{len(branch_hierarchy)}: '{level}'")
+        if not (bank_user_pre_check.matches_schema and bank_user_pre_check.parsed_response):
+            bank_user_needs_update = True
+            # Step 1a: Open bank user selector panel
+            print("🔍 Opening bank user selection panel...")
+            nova.act("In the Roles tab, click the button with three dots (...) next to the Bank user field to open the bank user selection panel")
+            time.sleep(2)
             
-            if i == 0:
-                # First level: Find and click on the bank level (VIB Bank)
-                print(f"🏦 Selecting bank level: '{level}'")
-                nova.act(f"In the leftmost column of the scope selection panel, find and click on the item labeled '{level}' to expand it")
-            elif i == 1:
-                # Second level: Find and click on the region level (North/South)
-                print(f"🌍 Selecting region level: '{level}'")
-                nova.act(f"In the middle column that appeared after selecting the bank, find and click on the item labeled '{level}' to expand it")
+            # Wait for bank user selection panel to load completely
+            if not self.wait_for_loading_complete(nova, timeout_seconds=60, action_description="bank user selection panel to load"):
+                print("❌ Timeout waiting for bank user selection panel to load")
+                return False
+            
+            # Step 1b: Navigate through hierarchy levels for bank user
+            for i, level in enumerate(branch_hierarchy):
+                print(f"📍 Bank user navigation - level {i+1}/{len(branch_hierarchy)}: '{level}'")
+                
+                if i == 0:
+                    # First level: Find and click on the bank level (VIB Bank)
+                    print(f"🏦 Selecting bank level: '{level}'")
+                    nova.act(f"In the leftmost column of the bank user selection panel, find and click on the item labeled '{level}' to expand it")
+                elif i == 1:
+                    # Second level: Find and click on the region level (North/South)
+                    print(f"🌍 Selecting region level: '{level}'")
+                    nova.act(f"In the middle column that appeared after selecting the bank, find and click on the item labeled '{level}' to expand it")
+                else:
+                    # Final level: Find and select the specific branch/bank user
+                    print(f"🎯 Selecting final bank user: '{level}'")
+                    # Use the search box in the rightmost column to find the specific bank user
+                    nova.act(f"In the rightmost column, use the search input field (with placeholder 'Search ...') and type '{level}' to filter the bank users")
+                    # Find and check the checkbox for the specific bank user
+                    nova.act(f"In the filtered results in the rightmost column, find the row that contains '{level}' and click its checkbox to select it")
+            
+            # Step 1c: Apply bank user selection
+            print("💾 Applying bank user selection...")
+            nova.act("Click the purple 'Select' button at the bottom of the bank user selection panel to apply the selection")
+            time.sleep(2)
+            
+            # Verify bank user selection was applied (hierarchy panel closes, stays in Edit user modal)
+            bank_user_updated = nova.act(
+                f"Verify that the Bank user field now contains '{final_branch}' and the hierarchy selection panel has closed. You should still be in the Edit user modal on the Roles tab.",
+                schema=BOOL_SCHEMA
+            )
+            
+            if bank_user_updated.matches_schema and bank_user_updated.parsed_response:
+                print(f"✅ Bank user updated to: {final_branch}")
             else:
-                # Final level: Find and select the specific branch
-                print(f"🎯 Selecting final branch: '{level}'")
-                # Use the search box in the rightmost column to find the specific branch
-                nova.act(f"In the rightmost column, use the search input field (with placeholder 'Search ...') and type '{level}' to filter the branches")
-                # Find and check the checkbox for the specific branch
-                nova.act(f"In the filtered results in the rightmost column, find the row that contains '{level}' and click its checkbox to select it")
-        
-        # Step 3: Apply selection
-        print("💾 Applying branch selection...")
-        nova.act("Click the purple 'Select' button at the bottom of the scope selection panel to apply the branch selection")
-        time.sleep(2)
-        
-        if auto_save:
-            # Post-action verify + save combined
-            verify_and_save = nova.act(
-                f"Without reopening the selector, confirm the Scope textbox now CONTAINS '{final_branch}'. If yes, click the green Save button, wait for success indication (modal closes or success toast/message). Return True only if token present and success message or close observed.",
-                schema=BOOL_SCHEMA
-            )
-            if verify_and_save.matches_schema and verify_and_save.parsed_response:
-                print(f"✅ Hierarchical scope updated & saved for branch: {final_branch}")
-                self.session_data['last_branch_change_performed'] = True
-                self.session_data['branch_saved'] = True
-                return True
-            print(f"❌ Failed to update/save hierarchical branch: {final_branch}")
-            self.session_data['last_branch_change_performed'] = False
-            self.session_data['branch_saved'] = False
-            return False
+                print(f"❌ Failed to update bank user to: {final_branch}")
+                return False
         else:
-            # Verify only (no save)
-            verify_only = nova.act(
-                f"Without reopening the selector, confirm the Scope textbox now CONTAINS '{final_branch}'. Return True if token present (do NOT click Save).",
+            print(f"ℹ️ Bank user already contains target token '{final_branch}'; skipping bank user update")
+        
+        # =================================================================
+        # STEP 2: Change Scope using hierarchical navigation (ALWAYS EXECUTED)
+        # =================================================================
+        print("🎯 STEP 2: Changing Scope using hierarchical navigation...")
+        print("ℹ️ Still in the same Edit user modal, now working on the Scope field...")
+        
+        # Check if scope already contains target branch
+        scope_pre_check = nova.act(
+            f"IMPORTANT: Look ONLY at the Scope field (NOT the Bank user field or any other field). Read the exact text content of the Scope textbox. Return True ONLY if the Scope field's text content contains '{final_branch}' as a substring. If the Scope field does not contain '{final_branch}', return False. Ignore all other fields like Bank user, Role, etc.", 
+            schema=BOOL_SCHEMA
+        )
+        
+        if not (scope_pre_check.matches_schema and scope_pre_check.parsed_response):
+            scope_needs_update = True
+            # Step 2a: Open scope selector panel
+            print("🔍 Opening scope selection panel...")
+            nova.act("In the same Edit user modal, click the FIRST non-empty scope input field to open the scope selection panel")
+            time.sleep(2)
+            
+            # Wait for scope selection panel to load completely
+            if not self.wait_for_loading_complete(nova, timeout_seconds=60, action_description="scope selection panel to load"):
+                print("❌ Timeout waiting for scope selection panel to load")
+                return False
+            
+            # Step 2b: Navigate through hierarchy levels for scope
+            for i, level in enumerate(branch_hierarchy):
+                print(f"📍 Scope navigation - level {i+1}/{len(branch_hierarchy)}: '{level}'")
+                
+                if i == 0:
+                    # First level: Find and click on the bank level (VIB Bank)
+                    print(f"🏦 Selecting bank level: '{level}'")
+                    nova.act(f"In the leftmost column of the scope selection panel, find and click on the item labeled '{level}' to expand it")
+                elif i == 1:
+                    # Second level: Find and click on the region level (North/South)
+                    print(f"🌍 Selecting region level: '{level}'")
+                    nova.act(f"In the middle column that appeared after selecting the bank, find and click on the item labeled '{level}' to expand it")
+                else:
+                    # Final level: Find and select the specific branch
+                    print(f"🎯 Selecting final scope branch: '{level}'")
+                    # Use the search box in the rightmost column to find the specific branch
+                    nova.act(f"In the rightmost column, use the search input field (with placeholder 'Search ...') and type '{level}' to filter the branches")
+                    # Find and check the checkbox for the specific branch
+                    nova.act(f"In the filtered results in the rightmost column, find the row that contains '{level}' and click its checkbox to select it")
+            
+            # Step 2c: Apply scope selection
+            print("💾 Applying scope selection...")
+            nova.act("Click the purple 'Select' button at the bottom of the scope selection panel to apply the branch selection")
+            time.sleep(2)
+            
+            # Verify scope was updated
+            scope_verify = nova.act(
+                f"VERIFICATION: After the scope selection, look specifically at the Scope textbox only. Read its exact text content. Return True ONLY if the Scope field now contains '{final_branch}' as a substring. Return False if the Scope field does not contain '{final_branch}'. Ignore other fields like Bank user.",
                 schema=BOOL_SCHEMA
             )
-            if verify_only.matches_schema and verify_only.parsed_response:
-                print(f"✅ Hierarchical scope updated (pending save) for branch: {final_branch}")
-                self.session_data['last_branch_change_performed'] = True
-                self.session_data['branch_saved'] = False
-                return True
-            print(f"❌ Failed to update hierarchical branch (no save path): {final_branch}")
-            self.session_data['last_branch_change_performed'] = False
-            self.session_data['branch_saved'] = False
+            
+            if not (scope_verify.matches_schema and scope_verify.parsed_response):
+                print(f"❌ Failed to update scope to: {final_branch}")
+                return False
+            else:
+                print(f"✅ Scope updated to contain: {final_branch}")
+        else:
+            print(f"ℹ️ Scope already contains target token '{final_branch}'; skipping scope update")
+        
+        # =================================================================
+        # FINAL VERIFICATION: Both Bank User and Scope must contain target
+        # =================================================================
+        print("🔍 Final verification: Checking both Bank User and Scope contain target branch...")
+        
+        # Double-check both fields contain the target branch
+        final_bank_check = nova.act(
+            f"VERIFICATION: Look specifically at the Bank user field only. Read its exact text content. Return True ONLY if the Bank user field contains '{final_branch}' as a substring. Return False if it does not contain '{final_branch}'. Do not consider any other fields.",
+            schema=BOOL_SCHEMA
+        )
+        
+        final_scope_check = nova.act(
+            f"VERIFICATION: Look specifically at the Scope field only. Read its exact text content. Return True ONLY if the Scope field contains '{final_branch}' as a substring. Return False if it does not contain '{final_branch}'. Do not consider any other fields.",
+            schema=BOOL_SCHEMA
+        )
+        
+        # Both fields must contain the target branch
+        both_fields_valid = (
+            final_bank_check.matches_schema and final_bank_check.parsed_response and
+            final_scope_check.matches_schema and final_scope_check.parsed_response
+        )
+        
+        if not both_fields_valid:
+            print(f"❌ Verification failed: Bank User or Scope does not contain '{final_branch}'")
+            print(f"   Bank User contains target: {final_bank_check.parsed_response if final_bank_check.matches_schema else 'Error'}")
+            print(f"   Scope contains target: {final_scope_check.parsed_response if final_scope_check.matches_schema else 'Error'}")
             return False
+        
+        # =================================================================
+        # SAVE CHANGES (if auto_save enabled and updates were made)
+        # =================================================================
+        if auto_save:
+            if bank_user_needs_update or scope_needs_update:
+                print("💾 Saving changes...")
+                save_result = nova.act("Click the green Save button to save all changes", schema=BOOL_SCHEMA)
+                
+                if save_result.matches_schema and save_result.parsed_response:
+                    # Wait for save operation to complete
+                    if self.wait_for_loading_complete(nova, timeout_seconds=60, action_description="save operation to complete"):
+                        print(f"✅ All changes saved successfully for branch: {final_branch}")
+                        self.session_data['last_branch_change_performed'] = True
+                        self.session_data['branch_saved'] = True
+                    else:
+                        print(f"❌ Timeout during save operation for branch: {final_branch}")
+                        return False
+                else:
+                    print(f"❌ Failed to save changes for branch: {final_branch}")
+                    return False
+            else:
+                print("ℹ️ No changes needed - both fields already contain target branch")
+                self.session_data['last_branch_change_performed'] = False
+                self.session_data['branch_saved'] = True
+        else:
+            print(f"✅ Both bank user and scope verified to contain '{final_branch}' (save pending)")
+            self.session_data['last_branch_change_performed'] = bank_user_needs_update or scope_needs_update
+            self.session_data['branch_saved'] = False
+        
+        print(f"✅ SUCCESS: Both Bank User and Scope contain target branch '{final_branch}'")
+        return True
 
-    def change_bank_user_hierarchical(self, nova: NovaAct, branch_hierarchy: List[str]) -> bool:
-        """Change bank user in the Person tab using hierarchical navigation through branch_hierarchy.
+    def _convert_to_hierarchy(self, branch_name: str) -> List[str]:
+        """Convert a simple branch name to a default hierarchy format.
+        
+        This is a fallback for when new_branch is provided instead of branch_hierarchy.
+        In practice, users should provide branch_hierarchy for proper hierarchical navigation.
         
         Args:
-            nova: NovaAct instance
-            branch_hierarchy: List of hierarchical levels to navigate (e.g., ["VIB Bank", "North", "003_CAU GIAY"])
+            branch_name: Simple branch name (e.g., "003_CAU GIAY")
             
         Returns:
-            bool: True if bank user was successfully changed, False otherwise
+            List[str]: Default hierarchy with the branch as the final level
         """
-        if not branch_hierarchy or len(branch_hierarchy) == 0:
-            print("❌ Empty branch hierarchy provided for bank user")
-            return False
-            
-        final_branch = branch_hierarchy[-1]  # Last element is the target branch
-        print(f"🏦 Changing bank user using hierarchical path: {' → '.join(branch_hierarchy)}")
-        
-        # Ensure we're on the Roles tab before any checks
-        nova.act("Click on the 'Roles' tab in the Edit user modal")
-        
-        # Composite pre-check without opening panel - check if final branch already present in Bank user field
-        pre_token = nova.act(
-            f"Just read the current Bank user textbox (no clicks) and return True if it already CONTAINS '{final_branch}' (substring acceptable).", 
-            schema=BOOL_SCHEMA
-        )
-        if pre_token.matches_schema and pre_token.parsed_response:
-            print(f"ℹ️ Bank user already contains target token '{final_branch}'; skipping")
-            self.session_data['last_bank_user_change_performed'] = False
-            return True
-        
-        # Step 1: Open bank user selector panel
-        print("🔍 Opening bank user selection panel...")
-        nova.act("In the Person tab, click the button with three dots (...) next to the Bank user field to open the bank user selection panel")
-        time.sleep(2)
-        
-        # Step 2: Navigate through hierarchy levels step by step
-        for i, level in enumerate(branch_hierarchy):
-            print(f"📍 Navigating to bank user level {i+1}/{len(branch_hierarchy)}: '{level}'")
-            
-            if i == 0:
-                # First level: Find and click on the bank level (VIB Bank)
-                print(f"🏦 Selecting bank level: '{level}'")
-                nova.act(f"In the leftmost column of the bank user selection panel, find and click on the item labeled '{level}' to expand it")
-            elif i == 1:
-                # Second level: Find and click on the region level (North/South)
-                print(f"🌍 Selecting region level: '{level}'")
-                nova.act(f"In the middle column that appeared after selecting the bank, find and click on the item labeled '{level}' to expand it")
-            else:
-                # Final level: Find and select the specific branch/bank user
-                print(f"🎯 Selecting final bank user: '{level}'")
-                # Use the search box in the rightmost column to find the specific bank user
-                nova.act(f"In the rightmost column, use the search input field (with placeholder 'Search ...' if available) and type '{level}' to filter the bank users")
-                # Find and check the checkbox for the specific bank user
-                nova.act(f"In the filtered results in the rightmost column, find the row that contains '{level}' and click its checkbox to select it")
-        
-        # Step 3: Apply selection
-        print("💾 Applying bank user selection...")
-        nova.act("Click the purple 'Select' button at the bottom of the bank user selection panel to apply the selection")
-        time.sleep(2)
-        
-        # Verify the change
-        verify_change = nova.act(
-            f"Without reopening the selector, confirm the Bank user textbox now CONTAINS '{final_branch}'. Return True if token present.",
-            schema=BOOL_SCHEMA
-        )
-        
-        if verify_change.matches_schema and verify_change.parsed_response:
-            print(f"✅ Bank user updated using hierarchical path: {final_branch}")
-            self.session_data['last_bank_user_change_performed'] = True
-            return True
-        else:
-            print(f"❌ Failed to update bank user using hierarchical path: {final_branch}")
-            self.session_data['last_bank_user_change_performed'] = False
-            return False
-
-    def change_user_branch(self, nova: NovaAct, new_branch: str, auto_save: bool = True) -> bool:
-        """Change user branch using the Scope control.
-
-        If auto_save is True (default), the method will verify and click Save inside the composite action.
-        If auto_save is False, it will only perform the selection and verification (no Save click); caller must save later.
-        """
-        print(f"🏢 Changing user branch to: {new_branch}")
-        # Always ensure Roles tab active first (explicit, idempotent)
-        nova.act("Click (or re-click) the 'Roles' tab in the Edit user modal to ensure it is active before inspecting scope inputs")
-        # Composite pre-check without opening panel
-        pre_token = nova.act(
-            f"Just read the current Scope textbox (no clicks) and return True if it already CONTAINS '{new_branch}' (substring acceptable).", schema=BOOL_SCHEMA
-        )
-        if pre_token.matches_schema and pre_token.parsed_response:
-            print("ℹ️ Branch already contains target token; skipping")
-            self.session_data['last_branch_change_performed'] = False
-            return True
-        # Single composite action: activate Roles tab, open correct scope input, open panel, search & select, apply
-        composite = nova.act(
-            f"Do ALL of these steps atomically: (1) Ensure 'Roles' tab is active (click if not); (2) Click the FIRST non-empty scope input (not the empty placeholder) to open the scope selection panel; (3) Once panel visible, click FIRST selectable item in leftmost column to focus; (4) Focus rightmost column search input with placeholder 'Search ...' and replace text with '{new_branch}'; (5) In filtered results find row whose label contains '{new_branch}' (case-insensitive, substring match acceptable) and ensure its checkbox is checked; (6) Click the purple Select button to apply. Avoid extra intermediate confirmations or reopening the panel.)"
-        )
-        if auto_save:
-            # Post-action verify + save combined
-            verify_and_save = nova.act(
-                f"Without reopening the selector, confirm the Scope textbox now CONTAINS '{new_branch}'. If yes, click the green Save button, wait for success indication (modal closes or success toast/message). Return True only if token present and success message or close observed.",
-                schema=BOOL_SCHEMA
-            )
-            if verify_and_save.matches_schema and verify_and_save.parsed_response:
-                print(f"✅ Scope updated & saved for branch token: {new_branch}")
-                self.session_data['last_branch_change_performed'] = True
-                self.session_data['branch_saved'] = True
-                return True
-            print(f"❌ Failed to update/save branch token: {new_branch}")
-            self.session_data['last_branch_change_performed'] = False
-            self.session_data['branch_saved'] = False
-            return False
-        else:
-            # Verify only (no save)
-            verify_only = nova.act(
-                f"Without reopening the selector, confirm the Scope textbox now CONTAINS '{new_branch}'. Return True if token present (do NOT click Save).",
-                schema=BOOL_SCHEMA
-            )
-            if verify_only.matches_schema and verify_only.parsed_response:
-                print(f"✅ Scope updated (pending save) for branch token: {new_branch}")
-                self.session_data['last_branch_change_performed'] = True
-                self.session_data['branch_saved'] = False
-                return True
-            print(f"❌ Failed to update branch token (no save path): {new_branch}")
-            self.session_data['last_branch_change_performed'] = False
-            self.session_data['branch_saved'] = False
-            return False
+        # Default hierarchy structure - adjust based on your organization
+        # This assumes a basic 3-level structure: Bank -> Region -> Branch
+        return ["VIB Bank", "North", branch_name]  # Default to North region
     
     def save_changes(self, nova: NovaAct) -> bool:
         """Save the role and branch changes using the green save button"""
@@ -824,20 +937,6 @@ class CSPAdminRoleAndBranchChanger:
             if role_requested and branch_requested:
                 logger.info("Processing both role and branch changes")
                 
-                # Change bank user first (if using hierarchy)
-                if use_hierarchy:
-                    logger.debug("Changing bank user using hierarchy")
-                    if not self.change_bank_user_hierarchical(nova, user_request.branch_hierarchy):
-                        logger.error("Bank user change failed")
-                        self.results.append(RoleChangeResult(
-                            user_email=user_request.target_user,
-                            new_role=user_request.new_role,
-                            new_branch=user_request.new_branch or "unchanged",
-                            status="failed - bank user change failed",
-                            timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
-                        ))
-                        return False
-                
                 logger.debug(f"Changing role to: {user_request.new_role}")
                 if not self.change_user_role(nova, user_request.new_role):
                     logger.error("Role change failed")
@@ -853,13 +952,16 @@ class CSPAdminRoleAndBranchChanger:
                 role_changed = self.session_data.get('last_role_change_performed', False)
                 logger.debug(f"Role change performed: {role_changed}")
                 
-                # Use hierarchical or simple branch change
+                # Determine branch hierarchy to use
                 if use_hierarchy:
-                    logger.debug("Using hierarchical branch change")
-                    branch_success = self.change_user_branch_hierarchical(nova, user_request.branch_hierarchy, auto_save=False)
+                    branch_hierarchy = user_request.branch_hierarchy
+                    logger.debug("Using provided hierarchical branch change")
                 else:
-                    logger.debug("Using simple branch change")
-                    branch_success = self.change_user_branch(nova, user_request.new_branch, auto_save=False)
+                    branch_hierarchy = self._convert_to_hierarchy(user_request.new_branch)
+                    logger.debug(f"Using converted hierarchy for branch: {user_request.new_branch}")
+                
+                # Use hierarchical branch change (includes both bank user and scope)
+                branch_success = self.change_user_branch_hierarchical(nova, branch_hierarchy, auto_save=False)
                 
                 if not branch_success:
                     logger.error("Branch change failed")
@@ -873,11 +975,10 @@ class CSPAdminRoleAndBranchChanger:
                     return False
                 
                 branch_changed = self.session_data.get('last_branch_change_performed', False)
-                bank_user_changed = self.session_data.get('last_bank_user_change_performed', False)
-                logger.debug(f"Changes - Branch: {branch_changed}, Bank user: {bank_user_changed}")
+                logger.debug(f"Changes - Branch: {branch_changed}")
                 
                 # Only save if there were actual changes
-                if role_changed or branch_changed or bank_user_changed:
+                if role_changed or branch_changed:
                     logger.debug("Saving changes")
                     if not self.save_changes(nova):
                         logger.error("Save failed")
@@ -927,27 +1028,17 @@ class CSPAdminRoleAndBranchChanger:
                         
             elif branch_requested:
                 logger.info("Processing branch change only")
-                # Change bank user first (if using hierarchy)
-                if use_hierarchy:
-                    logger.debug("Changing bank user using hierarchy")
-                    if not self.change_bank_user_hierarchical(nova, user_request.branch_hierarchy):
-                        logger.error("Bank user change failed")
-                        self.results.append(RoleChangeResult(
-                            user_email=user_request.target_user,
-                            new_role=user_request.new_role or "unchanged",
-                            new_branch=user_request.new_branch or "unchanged",
-                            status="failed - bank user change failed",
-                            timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
-                        ))
-                        return False
                 
-                # Use hierarchical or simple branch change with auto_save=True
+                # Determine branch hierarchy to use
                 if use_hierarchy:
-                    logger.debug("Using hierarchical branch change with auto-save")
-                    branch_success = self.change_user_branch_hierarchical(nova, user_request.branch_hierarchy, auto_save=True)
+                    branch_hierarchy = user_request.branch_hierarchy
+                    logger.debug("Using provided hierarchical branch change with auto-save")
                 else:
-                    logger.debug("Using simple branch change with auto-save")
-                    branch_success = self.change_user_branch(nova, user_request.new_branch, auto_save=True)
+                    branch_hierarchy = self._convert_to_hierarchy(user_request.new_branch)
+                    logger.debug(f"Using converted hierarchy for branch: {user_request.new_branch}")
+                
+                # Use hierarchical branch change with auto_save=True (includes both bank user and scope)
+                branch_success = self.change_user_branch_hierarchical(nova, branch_hierarchy, auto_save=True)
                 
                 if not branch_success:
                     logger.error("Branch change failed")
@@ -962,12 +1053,11 @@ class CSPAdminRoleAndBranchChanger:
                 
                 # Check if changes were actually performed
                 branch_changed = self.session_data.get('last_branch_change_performed', False)
-                bank_user_changed = self.session_data.get('last_bank_user_change_performed', False)
-                logger.debug(f"Branch change performed: {branch_changed}, Bank user change performed: {bank_user_changed}")
+                logger.debug(f"Branch change performed: {branch_changed}")
                 
-                if not branch_changed and not bank_user_changed:
-                    logger.info("No changes needed - branch and bank user already set correctly")
-                    print("ℹ️ No changes needed - branch and bank user already set correctly")
+                if not branch_changed:
+                    logger.info("No changes needed - branch already set correctly")
+                    print("ℹ️ No changes needed - branch already set correctly")
             else:
                 logger.info("No changes requested (neither role nor branch)")
                 print("ℹ️ No changes requested (neither role nor branch)")
@@ -980,14 +1070,12 @@ class CSPAdminRoleAndBranchChanger:
             # Determine if any changes were actually made
             role_changed = self.session_data.get('last_role_change_performed', False)
             branch_changed = self.session_data.get('last_branch_change_performed', False)
-            bank_user_changed = self.session_data.get('last_bank_user_change_performed', False)
             
             # Create appropriate status message
             if role_requested and branch_requested:
                 changed_items = []
                 if role_changed: changed_items.append("role")
                 if branch_changed: changed_items.append("branch")
-                if bank_user_changed: changed_items.append("bank user")
                 
                 if changed_items:
                     status = f"success - {' and '.join(changed_items)} updated"
@@ -999,14 +1087,10 @@ class CSPAdminRoleAndBranchChanger:
                 else:
                     status = "success - role already correct"
             elif branch_requested:
-                changed_items = []
-                if branch_changed: changed_items.append("branch")
-                if bank_user_changed: changed_items.append("bank user")
-                
-                if changed_items:
-                    status = f"success - {' and '.join(changed_items)} updated"
+                if branch_changed:
+                    status = "success - branch updated"
                 else:
-                    status = "success - branch and bank user already correct"
+                    status = "success - branch already correct"
             else:
                 status = "success - no changes requested"
 
@@ -1038,8 +1122,14 @@ class CSPAdminRoleAndBranchChanger:
 
         If per_user_session is True, launches a fresh browser session per user to isolate state.
         Returns True only if all user operations succeed.
+        
+        Note: parallel_workers is deprecated and ignored. App now runs in single worker mode for stability.
         """
         logger.info(f"Starting batch processing from file: {input_file}")
+        
+        # Force single worker mode for stability
+        parallel_workers = None
+        logger.info("App configured for single worker mode (parallel workers disabled)")
         logger.debug(f"Parameters - per_user_session: {per_user_session}, parallel_workers: {parallel_workers}, start_retries: {start_retries}")
         
         # Load configuration
@@ -1058,84 +1148,15 @@ class CSPAdminRoleAndBranchChanger:
 
         success_count = 0
 
-        # Parallel isolated mode
-        if per_user_session and parallel_workers and parallel_workers > 1:
-            logger.info(f"Using parallel mode with {parallel_workers} workers (isolated sessions)")
-            print(f"⚙️ Parallel mode: {parallel_workers} workers (isolated sessions)")
-            lock = threading.Lock()
+        # Note: Parallel execution has been removed for stability
+        if parallel_workers and parallel_workers > 1:
+            logger.warning("Parallel workers parameter ignored - app now runs in single worker mode for stability")
+            print("⚠️ Parallel workers parameter ignored - app now runs in single worker mode for stability")
 
-            def worker(user_request: UserChangeRequest) -> RoleChangeResult:
-                local_changer = CSPAdminRoleAndBranchChanger("", self.nova_act_api_key, self.logs_directory)  # independent session data
-                for attempt in range(1, start_retries + 1):
-                    try:
-                        logger.debug(f"Worker starting session attempt {attempt} for user: {user_request.target_user}")
-                        with local_changer.create_nova_act_instance(config.admin_credentials.csp_admin_url) as nova:
-                            if not local_changer.login(nova, config.admin_credentials.username, admin_password):
-                                logger.error(f"Worker login failed for user: {user_request.target_user}")
-                                return RoleChangeResult(
-                                    user_email=user_request.target_user,
-                                    new_role=user_request.new_role or "unchanged",
-                                    new_branch=user_request.new_branch or "unchanged",
-                                    status="failed - login failed",
-                                    timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
-                                )
-                            if not local_changer.navigate_to_user_management(nova):
-                                logger.error(f"Worker navigation failed for user: {user_request.target_user}")
-                                return RoleChangeResult(
-                                    user_email=user_request.target_user,
-                                    new_role=user_request.new_role or "unchanged",
-                                    new_branch=user_request.new_branch or "unchanged",
-                                    status="failed - navigation failed",
-                                    timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
-                                )
-                            local_changer.process_single_user(nova, user_request)
-                            return local_changer.results[-1]
-                    except StartFailed as sf:
-                        logger.warning(f"StartFailed (attempt {attempt}/{start_retries}) for {user_request.target_user}: {sf}")
-                        print(f"⚠️ StartFailed (attempt {attempt}/{start_retries}) for {user_request.target_user}: {sf}")
-                        if attempt < start_retries:
-                            time.sleep(2 * attempt)
-                            continue
-                        logger.error(f"StartFailed - all retries exhausted for {user_request.target_user}")
-                        return RoleChangeResult(
-                            user_email=user_request.target_user,
-                            new_role=user_request.new_role or "unchanged",
-                            new_branch=user_request.new_branch or "unchanged",
-                            status="failed - start timeout",
-                            timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
-                        )
-                    except Exception as e:
-                        logger.exception(f"Worker session error for {user_request.target_user}: {e}")
-                        return RoleChangeResult(
-                            user_email=user_request.target_user,
-                            new_role=user_request.new_role or "unchanged",
-                            new_branch=user_request.new_branch or "unchanged",
-                            status=f"failed - {str(e)}",
-                            timestamp=time.strftime("%Y-%m-%d %H:%M:%S")
-                        )
-
-            with ThreadPoolExecutor(max_workers=parallel_workers) as executor:
-                future_map = {executor.submit(worker, u): u for u in config.users}
-                for future in as_completed(future_map):
-                    result_obj = future.result()
-                    with lock:
-                        self.results.append(result_obj)
-                        if result_obj.status.startswith("success"):
-                            success_count += 1
-            total_users = len(config.users)
-            logger.info(f"Parallel batch completed - Success: {success_count}/{total_users}")
-            print(f"\n📊 Parallel Batch Summary:")
-            print(f"   Total users: {total_users}")
-            print(f"   Successful: {success_count}")
-            print(f"   Failed: {total_users - success_count}")
-            if total_users:
-                print(f"   Success rate: {(success_count/total_users)*100:.1f}%")
-            self.save_results()
-            return success_count == total_users
-
+        # Single worker mode execution
         if per_user_session:
-            logger.info("Using isolated browser session per user")
-            print("🔁 Using isolated browser session per user")
+            logger.info("Using isolated browser session per user (single worker mode)")
+            print("🔁 Using isolated browser session per user (single worker mode)")
             for user_request in config.users:
                 session_started = False
                 for attempt in range(1, start_retries + 1):
@@ -1243,18 +1264,22 @@ def create_sample_input_file(filename: str = "sample_input.json"):
             {
                 "target_user": "user1@example.com",
                 "new_role": "manager",
-                "new_branch": "branch_001"
+                "branch_hierarchy": ["VIB Bank", "North", "001_HA NOI"]
             },
             {
                 "target_user": "user2@example.com",
                 "new_role": "employee", 
-                "new_branch": "branch_002",
-                "branch_hierarchy": ["VIB Bank", "North", "002_HA NOI"]
+                "branch_hierarchy": ["VIB Bank", "South", "002_HO CHI MINH"]
             },
             {
                 "target_user": "user3@example.com",
                 "new_role": "supervisor",
-                "branch_hierarchy": ["VIB Bank", "South", "005_HO CHI MINH"]
+                "branch_hierarchy": ["VIB Bank", "North", "003_CAU GIAY"]
+            },
+            {
+                "target_user": "user4@example.com",
+                "new_role": "employee",
+                "new_branch": "005_THANH XUAN"  # Will be converted to default hierarchy
             }
         ]
     }
@@ -1263,14 +1288,14 @@ def create_sample_input_file(filename: str = "sample_input.json"):
         json.dump(sample_data, f, indent=2, ensure_ascii=False)
     
     print(f"📄 Sample input file created: {filename}")
-    print("💡 Note: Use 'branch_hierarchy' for hierarchical navigation or 'new_branch' for simple branch selection")
+    print("💡 Recommended: Use 'branch_hierarchy' for proper hierarchical navigation")
+    print("💡 Note: 'new_branch' is supported for backward compatibility but will use default hierarchy")
 
 
 def main(
     input_file: str,
     password: str = None,
     per_user_session: bool = True,
-    parallel_workers: int = 0,
     start_retries: int = 2,
     nova_act_api_key: str = None,
     logs_directory: str = None
@@ -1282,8 +1307,11 @@ def main(
         input_file: Path to JSON file containing user change requests
         password: Admin password (will prompt if not provided)
         per_user_session: Launch a new browser session per user for isolation (default True)
+        start_retries: Number of retries for starting browser sessions (default 2)
         nova_act_api_key: Nova Act API key (if not provided, will use environment variable)
         logs_directory: Directory to save Nova Act traces and logs
+    
+    Note: App now runs in single worker mode for improved stability and reliability.
     """
     
     logger.info("CSP Admin Role and Branch Change Automation starting")
@@ -1317,7 +1345,7 @@ def main(
     
     # Create and run the automation
     changer = CSPAdminRoleAndBranchChanger("", nova_act_api_key, logs_directory)  # URL will be loaded from config
-    success = changer.run_batch(input_file, password, per_user_session=per_user_session, parallel_workers=parallel_workers, start_retries=start_retries)
+    success = changer.run_batch(input_file, password, per_user_session=per_user_session, start_retries=start_retries)
     
     if success:
         logger.info("All users processed successfully")
