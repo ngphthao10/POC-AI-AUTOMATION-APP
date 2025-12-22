@@ -49,6 +49,8 @@ import os
 from pathlib import Path
 from typing import Optional, List, Dict
 from pydantic import BaseModel
+from dotenv import load_dotenv
+load_dotenv()
 
 from nova_act import NovaAct, BOOL_SCHEMA
 from nova_act.types.errors import StartFailed
@@ -78,20 +80,15 @@ def setup_logging():
 # Initialize logging
 logger = setup_logging()
 
-# Import Nova Act configuration
-try:
-    from src.config.nova_act_config import get_nova_act_api_key
-except ImportError:
-    # Fallback for development/non-built environments
-    def get_nova_act_api_key():
-        import os
-        api_key = os.getenv('NOVA_ACT_API_KEY')
-        if not api_key:
-            raise ValueError(
-                "Nova Act API key not found. Please set NOVA_ACT_API_KEY environment variable "
-                "or configure it in src/config/nova_act_config.py"
-            )
-        return api_key
+def get_nova_act_api_key():
+    import os
+    api_key = os.getenv('NOVA_ACT_API_KEY')
+    if not api_key:
+        raise ValueError(
+            "Nova Act API key not found. Please set NOVA_ACT_API_KEY environment variable "
+            "or configure it in src/config/nova_act_config.py"
+        )
+    return api_key
 
 
 class AdminCredentials(BaseModel):

@@ -40,3 +40,11 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
+*.log.*
+
+# Screenshots & Videos (Phase 1 & 2)
+screenshots/
+test_screenshots/
+videos/
+.claude

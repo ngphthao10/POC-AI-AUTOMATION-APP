@@ -2,7 +2,7 @@
   "admin_credentials": {
     "username": "mb\\nghia.ht.dev",
     "password": "VIB@vib#21",
-    "csp_admin_url": "https://10.50.142.37:7051/branchgui-web-client/portal/users/list"
+    "csp_admin_url": "https://csp.local:7051/branchgui-web-client/portal/users/list"
   },
   "users": [
     {
@@ -22,4 +22,3 @@
     }
   ]
 }
-

@@ -8,6 +8,9 @@ import sys
 import os
 import json
 from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv()
+
 
 def get_application_path():
     """Lấy thư mục nơi ứng dụng đang chạy"""
@@ -171,49 +174,44 @@ def demo_automation_run():
     input("\nNhấn Enter để tiếp tục...")
 
 def run_actual_csp_automation(input_file: str):
-    """Chạy tự động hóa CSP thực tế"""
+    """Chạy tự động hóa CSP thực tế với enhanced features"""
     try:
-        try:
-            from src.csp.csp_admin_change_role_and_branch import CSPAdminRoleAndBranchChanger
-            from src.config.nova_act_config import get_nova_act_api_key
-        except ImportError as e:
-            print(f"❌ Không thể import: {e}")
-            print("Cài đặt: pip install nova-act fire pydantic")
-            return
-        
-        # Get Nova Act API key
-        try:
-            api_key = get_nova_act_api_key()
-            print("✅ Đã tải Nova Act API key")
-        except Exception as e:
-            print(f"❌ Lỗi Nova Act API key: {e}")
-            print("💡 Vui lòng cấu hình API key trong src/config/nova_act_config.py")
-            return
-        
-        changer = CSPAdminRoleAndBranchChanger("", api_key)
-        
-        # Cấu hình cho single worker (không song song)
-        print(f"🔧 Worker: 1 (single worker mode)")
-        print("=" * 40)
-        
-        # Chạy tự động hóa với single worker
-        success = changer.run_batch(
-            input_file=input_file,
-            per_user_session=True,
-            parallel_workers=None  # Force single worker mode
-        )
-        
-        print("=" * 40)
+        # Import enhanced csp_admin_main
+        from src.features.csp.csp_admin_main import main as csp_main
+
+        print("=" * 60)
+        print("🚀 ENHANCED CSP AUTOMATION")
+        print("=" * 60)
+        print("✨ Features:")
+        print("  • Video recording (if enabled in .env)")
+        print("  • Screenshot capture on errors")
+        print("  • Auto-retry on failures")
+        print("  • Enhanced logging to files")
+        print("  • Wait for loading indicators")
+        print("=" * 60)
+        print()
+
+        # Run the enhanced automation
+        success = csp_main(input_file=input_file)
+
+        print()
+        print("=" * 60)
         if success:
             print("✅ Hoàn thành thành công!")
+            print("📂 Check logs/ folder for detailed logs")
+            print("📸 Check screenshots/ folder for screenshots")
         else:
             print("⚠️  Hoàn thành với lỗi")
-        print("📄 Kết quả lưu trong file JSON")
-            
+            print("📂 Check logs/ folder for error details")
+            print("📸 Check screenshots/ folder for error screenshots")
+        print("=" * 60)
+
     except KeyboardInterrupt:
         print("\n⚠️  Bị gián đoạn")
     except Exception as e:
         print(f"\n❌ Lỗi: {e}")
+        import traceback
+        traceback.print_exc()
 
 def main():
     """Hàm chính"""
