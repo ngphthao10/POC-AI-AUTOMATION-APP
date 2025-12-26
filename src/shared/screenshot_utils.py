@@ -1,6 +1,3 @@
-"""
-Screenshot utilities for debugging and documentation
-"""
 import time
 import logging
 from pathlib import Path
@@ -12,7 +9,6 @@ logger = logging.getLogger(__name__)
 
 
 class ScreenshotManager:
-    """Manage screenshot capture for automation runs"""
 
     def __init__(
         self,
@@ -20,14 +16,6 @@ class ScreenshotManager:
         execution_id: Optional[str] = None,
         quality: int = 85
     ):
-        """
-        Initialize screenshot manager.
-
-        Args:
-            base_dir: Base directory for screenshots
-            execution_id: Execution ID for organizing screenshots
-            quality: JPEG quality (0-100)
-        """
         if not execution_id:
             execution_id = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -96,16 +84,6 @@ class ScreenshotManager:
         nova: NovaAct,
         prefix: str = "screenshot"
     ) -> str:
-        """
-        Capture screenshot with timestamp in filename.
-
-        Args:
-            nova: NovaAct instance
-            prefix: Prefix for filename
-
-        Returns:
-            Path to saved screenshot
-        """
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:-3]
         filename = f"{prefix}_{timestamp}.jpg"
         filepath = self.screenshot_dir / filename
@@ -127,16 +105,6 @@ class ScreenshotManager:
         nova: NovaAct,
         name: str = "full_page"
     ) -> str:
-        """
-        Capture full page screenshot (scrolls to capture entire page).
-
-        Args:
-            nova: NovaAct instance
-            name: Name for screenshot
-
-        Returns:
-            Path to saved screenshot
-        """
         timestamp = int(time.time())
         filename = f"{timestamp}_{name}.jpg"
         filepath = self.screenshot_dir / filename
@@ -170,21 +138,6 @@ def capture_screenshot(
     quality: int = 85,
     full_page: bool = False
 ) -> bool:
-    """
-    Simple screenshot capture function.
-
-    Args:
-        nova: NovaAct instance
-        filepath: Path where to save screenshot
-        quality: JPEG quality (0-100)
-        full_page: Capture full page or just viewport
-
-    Returns:
-        True if successful, False otherwise
-
-    Usage:
-        capture_screenshot(nova, 'screenshots/login.jpg')
-    """
     try:
         # Create directory if needed
         Path(filepath).parent.mkdir(parents=True, exist_ok=True)
@@ -210,26 +163,7 @@ def capture_screenshot_on_error(
     error: Exception,
     base_dir: str = "screenshots/errors",
     execution_id: str = None
-) -> str:
-    """
-    Capture screenshot when an error occurs for debugging.
-
-    Args:
-        nova: NovaAct instance
-        error: Exception that occurred
-        base_dir: Base directory for error screenshots
-        execution_id: Execution ID
-
-    Returns:
-        Path to saved screenshot
-
-    Usage:
-        try:
-            # automation code
-        except Exception as e:
-            capture_screenshot_on_error(nova, e, execution_id='run_001')
-            raise
-    """
+) -> str:   
     if not execution_id:
         execution_id = datetime.now().strftime('%Y%m%d_%H%M%S')
 

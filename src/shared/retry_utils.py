@@ -1,6 +1,3 @@
-"""
-Retry logic utilities for handling transient failures
-"""
 import time
 import logging
 from typing import Callable, Any, Optional

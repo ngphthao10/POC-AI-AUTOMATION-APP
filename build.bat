@@ -1,215 +1,412 @@
 @echo off
-REM Build script for AI Automation Application with NovaAct and Playwright
-REM This script will create executable files using PyInstaller with full Playwright support
+REM ############################################################################
+REM CSP Automation Application - Build Script for Windows
+REM Description: Builds standalone executable with PyInstaller and Playwright
+REM Version: 2.0.0
+REM Updated: 2025-12-22
+REM ############################################################################
 
-echo 🚀 Building AI Automation Application with Playwright...
+setlocal enabledelayedexpansion
 
-REM Check if Python is installed
-python --version >nul 2>&1
+REM Configuration
+set APP_NAME=csp_automation
+set SPEC_FILE=csp_automation.spec
+set PYTHON_VERSION=3.10
+
+REM ############################################################################
+REM Helper Functions
+REM ############################################################################
+
+:print_header
+echo.
+echo ============================================================
+echo   CSP Automation Application - Build Script
+echo ============================================================
+echo.
+goto :eof
+
+:print_step
+echo [92m[*][0m %~1
+goto :eof
+
+:print_error
+echo [91m[X][0m %~1
+goto :eof
+
+:print_warning
+echo [93m[!][0m %~1
+goto :eof
+
+:print_success
+echo [92m[+][0m %~1
+goto :eof
+
+REM ############################################################################
+REM Preflight Checks
+REM ############################################################################
+
+:check_python
+call :print_step "Checking Python installation..."
+
+where python >nul 2>&1
 if errorlevel 1 (
-    echo ❌ Python is not installed. Please install Python first.
-    pause
+    call :print_error "Python is not installed. Please install Python 3.10+."
     exit /b 1
 )
 
-REM Check for existing virtual environments and use the appropriate one
-if exist "nova_act_env" (
-    echo 🔧 Using existing nova_act_env virtual environment...
-    call nova_act_env\Scripts\activate.bat
-) else if exist "venv" (
-    echo � Using existing venv virtual environment...
+for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VER=%%i
+call :print_success "Python %PYTHON_VER% found"
+goto :eof
+
+:check_required_files
+call :print_step "Checking required files..."
+
+set MISSING=0
+
+if not exist "console_app.py" (
+    call :print_error "Missing: console_app.py"
+    set MISSING=1
+)
+
+if not exist "requirements.txt" (
+    call :print_error "Missing: requirements.txt"
+    set MISSING=1
+)
+
+if not exist ".env" (
+    call :print_error "Missing: .env"
+    set MISSING=1
+)
+
+if not exist "input.json" (
+    call :print_error "Missing: input.json"
+    set MISSING=1
+)
+
+if %MISSING%==1 (
+    call :print_error "Some required files are missing"
+    exit /b 1
+)
+
+call :print_success "All required files present"
+goto :eof
+
+REM ############################################################################
+REM Virtual Environment Setup
+REM ############################################################################
+
+:setup_venv
+call :print_step "Setting up virtual environment..."
+
+if exist "venv\" (
+    call :print_warning "Virtual environment already exists, using it..."
     call venv\Scripts\activate.bat
 ) else (
-    echo �📦 Creating new virtual environment...
+    call :print_step "Creating new virtual environment..."
     python -m venv venv
     call venv\Scripts\activate.bat
+    call :print_success "Virtual environment created"
 )
+goto :eof
 
-REM Install or upgrade pip
-echo 📦 Upgrading pip...
-pip install --upgrade pip
+:install_dependencies
+call :print_step "Installing Python dependencies..."
 
-REM Install requirements first
-echo 📦 Installing Python requirements...
-pip install -r requirements.txt
+python -m pip install --upgrade pip --quiet
+python -m pip install -r requirements.txt --quiet
 
-REM Install Playwright browsers (critical for NovaAct)
-echo 🌐 Installing Playwright browsers (this may take a few minutes)...
+call :print_success "Dependencies installed"
+goto :eof
+
+:install_playwright
+call :print_step "Installing Playwright browsers..."
+
 playwright install chromium
 
-REM Verify Playwright installation
-echo ✅ Verifying Playwright installation...
-python -c "from playwright.sync_api import sync_playwright; import sys; p = sync_playwright(); browser = p.start().chromium.launch(headless=True); browser.close(); p.stop(); print('✅ Playwright browsers installed successfully')" 2>nul
 if errorlevel 1 (
-    echo ❌ Playwright verification failed. Build cannot continue.
-    pause
+    call :print_error "Failed to install Playwright browsers"
     exit /b 1
 )
 
-REM Check if PyInstaller is installed
-pip show pyinstaller >nul 2>&1
+call :print_success "Playwright browsers installed"
+goto :eof
+
+:verify_playwright
+call :print_step "Verifying Playwright installation..."
+
+python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().__enter__(); b = p.chromium.launch(headless=True); b.close()" 2>nul
+
 if errorlevel 1 (
-    echo 📦 Installing PyInstaller...
-    pip install pyinstaller
+    call :print_error "Playwright verification failed"
+    exit /b 1
 )
 
-REM Clean previous builds
-if exist "build" (
-    echo 🧹 Cleaning previous build...
-    rmdir /s /q build
-)
+call :print_success "Playwright verification passed"
+goto :eof
 
-if exist "dist" (
-    echo 🧹 Cleaning previous dist...
-    rmdir /s /q dist
-)
+REM ############################################################################
+REM Build Process
+REM ############################################################################
 
-REM Build the application
-echo 🔨 Building executable with Playwright support...
-echo 📋 PyInstaller will include:
-echo    - NovaAct package and artifacts
-echo    - Playwright drivers and browsers
-echo    - All Python dependencies
-echo    - Configuration files
+:clean_build
+call :print_step "Cleaning previous builds..."
+
+if exist "build\" rmdir /s /q build
+if exist "dist\" rmdir /s /q dist
+del /s /q *.pyc >nul 2>&1
+for /d /r . %%d in (__pycache__) do @if exist "%%d" rmdir /s /q "%%d"
+
+call :print_success "Build artifacts cleaned"
+goto :eof
+
+:generate_spec
+if not exist "%SPEC_FILE%" (
+    call :print_step "Generating spec file..."
+
+    pyi-makespec console_app.py --name="%APP_NAME%" --onefile --windowed --add-data="input.json;." --add-data=".env;." --hidden-import="nova_act" --hidden-import="playwright" --hidden-import="playwright.sync_api" --collect-all="playwright" --collect-all="nova_act"
+
+    call :print_success "Spec file generated"
+) else (
+    call :print_step "Using existing spec file"
+)
+goto :eof
+
+:run_pyinstaller
+call :print_step "Running PyInstaller..."
+echo.
+echo This may take a few minutes...
 echo.
 
-pyinstaller ai_automation_app.spec
+pyinstaller "%SPEC_FILE%" --clean --noconfirm
 
-REM Check if build was successful
-if errorlevel 0 (
-    echo ✅ Build successful!
-    
-    REM Copy input.json to dist directory
-    echo 📋 Copying input.json to distribution directory...
-    if exist "src\csp\input.json" (
-        copy "src\csp\input.json" "dist\"
-        echo ✅ input.json copied successfully
-    ) else (
-        echo ⚠️  input.json not found in src\csp\ - you can add it later
-    )
-    
-    REM Create a simple test script to verify the build
-    echo 🧪 Creating build verification script...
-    (
-        echo #!/usr/bin/env python3
-        echo import sys
-        echo import os
-        echo.
-        echo print("🧪 Testing built application dependencies..."^)
-        echo.
-        echo try:
-        echo     import nova_act
-        echo     print("✅ NovaAct import successful"^)
-        echo except ImportError as e:
-        echo     print(f"❌ NovaAct import failed: {e}"^)
-        echo     sys.exit(1^)
-        echo.
-        echo try:
-        echo     from playwright.sync_api import sync_playwright
-        echo     print("✅ Playwright import successful"^)
-        echo except ImportError as e:
-        echo     print(f"❌ Playwright import failed: {e}"^)
-        echo     sys.exit(1^)
-        echo.
-        echo try:
-        echo     with sync_playwright(^) as p:
-        echo         print("✅ Playwright context created"^)
-        echo         browser = p.chromium.launch(headless=True^)
-        echo         print("✅ Chromium browser launched"^)
-        echo         browser.close(^)
-        echo         print("✅ Browser closed successfully"^)
-        echo except Exception as e:
-        echo     print(f"❌ Playwright browser test failed: {e}"^)
-        echo     sys.exit(1^)
-        echo.
-        echo print("🎉 All tests passed! Built application should work correctly."^)
-    ) > "dist\test_build.py"
-
-    REM Create launch script for the built application
-    echo 🚀 Creating launch script...
-    (
-        echo @echo off
-        echo.
-        echo REM Startup script for AI Automation App
-        echo REM This ensures Playwright browsers are available before running the main application
-        echo.
-        echo set "SCRIPT_DIR=%%~dp0"
-        echo set "APP_NAME=ai_automation_app.exe"
-        echo.
-        echo echo � Starting AI Automation Application...
-        echo.
-        echo REM Check if this is the first run by looking for a marker file
-        echo set "FIRST_RUN_MARKER=%%SCRIPT_DIR%%.playwright_setup_complete"
-        echo.
-        echo if not exist "%%FIRST_RUN_MARKER%%" (
-        echo     echo 🌐 First run detected - setting up Playwright browsers...
-        echo     echo ⏳ This may take a few minutes to download browser binaries...
-        echo     
-        echo     REM Check if playwright command is available
-        echo     playwright install chromium ^>nul 2^>^&1
-        echo     if errorlevel 0 (
-        echo         echo ✅ Playwright browsers installed successfully
-        echo         echo. ^> "%%FIRST_RUN_MARKER%%"
-        echo     ^) else (
-        echo         echo ❌ Failed to install Playwright browsers
-        echo         echo 💡 You may need to run this manually: playwright install chromium
-        echo         pause
-        echo     ^)
-        echo     echo.
-        echo ^)
-        echo.
-        echo REM Run the main application
-        echo echo 🎯 Launching AI Automation Application...
-        echo "%%SCRIPT_DIR%%%%APP_NAME%%" %%*
-        echo.
-        echo REM Capture the exit code
-        echo set EXIT_CODE=%%ERRORLEVEL%%
-        echo.
-        echo if not %%EXIT_CODE%% == 0 (
-        echo     echo.
-        echo     echo ❌ Application exited with error code: %%EXIT_CODE%%
-        echo     echo.
-        echo     echo 🔧 Troubleshooting tips:
-        echo     echo    1. Ensure Playwright browsers are installed: playwright install chromium
-        echo     echo    2. Check that input.json is properly configured
-        echo     echo    3. Verify network connectivity to the CSP portal
-        echo     echo    4. Try running from a terminal for more detailed error messages
-        echo     echo.
-        echo ^)
-        echo.
-        echo exit /b %%EXIT_CODE%%
-    ) > "dist\launch_app.bat"
-    
-    echo 📁 Executable file location:
-    dir dist\
-    echo.
-    echo 🎉 Build completed successfully!
-    echo.
-    echo 🧪 To test the build:
-    echo    cd dist ^&^& python test_build.py
-    echo.
-    echo 🚀 To run your application:
-    echo    dist\ai_automation_app.exe
-    echo    or use: dist\launch_app.bat
-    echo.
-    for %%F in (dist\ai_automation_app.exe) do echo 📦 File size: %%~zF bytes
-    echo.
-    echo 💡 Important notes:
-    echo    - This build includes Playwright browsers
-    echo    - The executable should work on systems without Python
-    echo    - Make sure to copy both the executable and input.json
-    echo    - For deployment, the entire dist/ folder may be needed
-    
-) else (
-    echo ❌ Build failed!
-    echo 💡 Common issues:
-    echo    - Playwright browsers not installed properly
-    echo    - Missing Python dependencies
-    echo    - Insufficient disk space for browsers
-    echo.
-    echo 🔧 Try running: playwright install chromium
-    pause
+if errorlevel 1 (
+    call :print_error "PyInstaller build failed"
     exit /b 1
 )
 
+call :print_success "PyInstaller build completed"
+goto :eof
+
+:copy_assets
+call :print_step "Copying assets to dist folder..."
+
+if exist "input.json" (
+    if not exist "dist\input.json" copy input.json dist\ >nul
+)
+
+if exist ".env" (
+    if not exist "dist\.env" copy .env dist\ >nul
+)
+
+if not exist "dist\logs\" mkdir dist\logs
+if not exist "dist\screenshots\" mkdir dist\screenshots
+
+call :print_success "Assets copied"
+goto :eof
+
+:copy_playwright_browsers
+call :print_step "Copying Playwright browsers to dist folder..."
+
+set PLAYWRIGHT_CACHE=%LOCALAPPDATA%\ms-playwright
+
+if exist "%PLAYWRIGHT_CACHE%" (
+    call :print_step "Found Playwright browsers at: %PLAYWRIGHT_CACHE%"
+    if not exist "dist\.playwright-browsers\" mkdir "dist\.playwright-browsers"
+    xcopy /E /I /Y /Q "%PLAYWRIGHT_CACHE%\*" "dist\.playwright-browsers\" >nul
+    call :print_success "Playwright browsers copied (~300MB)"
+) else (
+    call :print_warning "Playwright browsers not found in cache"
+    call :print_warning "End users will need to install browsers separately"
+)
+goto :eof
+
+:create_launcher
+call :print_step "Creating launcher script..."
+
+(
+echo @echo off
+echo REM CSP Automation Launcher Script
+echo.
+echo cd /d "%%~dp0"
+echo.
+echo echo Starting CSP Automation...
+echo.
+echo REM Set Playwright browsers path to bundled location
+echo if exist ".playwright-browsers\" ^(
+echo     set PLAYWRIGHT_BROWSERS_PATH=%%~dp0.playwright-browsers
+echo     echo Using bundled Playwright browsers
+echo ^) else ^(
+echo     echo Warning: Bundled browsers not found, using system installation
+echo ^)
+echo.
+echo REM Set TMPDIR to avoid permission issues
+echo set TMPDIR=%%USERPROFILE%%\tmp
+echo if not exist "%%TMPDIR%%" mkdir "%%TMPDIR%%"
+echo.
+echo REM Run the application
+echo %APP_NAME%.exe %%*
+echo.
+echo if errorlevel 1 ^(
+echo     echo.
+echo     echo Application exited with error
+echo     echo.
+echo     echo Troubleshooting:
+echo     echo   - Check input.json is properly configured
+echo     echo   - Ensure .env file has correct credentials
+echo     echo   - Check logs/ folder for detailed errors
+echo     echo.
+echo     pause
+echo ^)
+) > dist\launch.bat
+
+call :print_success "Launcher script created"
+goto :eof
+
+:create_readme
+call :print_step "Creating README for distribution..."
+
+(
+echo ============================================================
+echo   CSP AUTOMATION APPLICATION - DISTRIBUTION PACKAGE
+echo ============================================================
+echo.
+echo NOTE: This Windows build does NOT require code signing
+echo       and will run without security warnings.
+echo       ^(macOS builds require Apple Developer certificate^)
+echo.
+echo PACKAGE CONTENTS:
+echo   - %APP_NAME%.exe       - Main executable
+echo   - launch.bat            - Launcher script ^(recommended^)
+echo   - input.json           - Configuration file ^(EDIT THIS^)
+echo   - .env                 - Environment variables ^(credentials^)
+echo   - logs/                - Log output directory
+echo   - screenshots/         - Screenshot output directory
+echo   - README.txt           - This file
+echo.
+echo QUICK START:
+echo.
+echo 1. Edit input.json with your configuration:
+echo    - admin_credentials ^(username, password, csp_admin_url^)
+echo    - users list ^(target_user, new_role, branch_hierarchy^)
+echo.
+echo 2. Edit .env with your credentials ^(if needed^)
+echo.
+echo 3. Run the application:
+echo    Double-click: launch.bat
+echo    or directly:  %APP_NAME%.exe
+echo.
+echo 4. Follow the on-screen menu
+echo.
+echo REQUIREMENTS:
+echo   - Windows 10+ ^(RECOMMENDED PLATFORM - no code signing needed^)
+echo   - Internet connection ^(for Playwright browsers on first run^)
+echo   - Sufficient disk space ^(~500MB for browser binaries^)
+echo.
+echo TROUBLESHOOTING:
+echo.
+echo Issue: Application crashes
+echo Fix:   Check logs/ folder for error details
+echo        Ensure input.json is valid JSON
+echo        Verify .env credentials are correct
+echo.
+echo Issue: Playwright browsers not found
+echo Fix:   Run: playwright install chromium
+echo.
+echo SUPPORT:
+echo   Check the logs/ folder for detailed error messages
+echo   Screenshots are saved in screenshots/ folder on errors
+echo.
+echo NOTES:
+echo   - First run may take longer ^(downloading browser binaries^)
+echo   - Logs are saved with timestamps in logs/ folder
+echo   - DO NOT delete browser cache directories
+echo.
+echo Version: 1.0.0
+echo Built: %date% %time%
+) > dist\README.txt
+
+call :print_success "README created"
+goto :eof
+
+REM ############################################################################
+REM Post-Build
+REM ############################################################################
+
+:verify_build
+call :print_step "Verifying build..."
+
+if not exist "dist\%APP_NAME%.exe" (
+    call :print_error "Executable not found in dist/"
+    exit /b 1
+)
+
+for %%A in ("dist\%APP_NAME%.exe") do set SIZE=%%~zA
+set /a SIZE_MB=!SIZE! / 1048576
+
+call :print_success "Build verified (Size: !SIZE_MB!MB)"
+goto :eof
+
+:print_summary
+echo.
+echo ============================================================
+echo   BUILD COMPLETED SUCCESSFULLY
+echo ============================================================
+echo.
+echo Build location: .\dist\
+echo Executable:     .\dist\%APP_NAME%.exe
+echo Launcher:       .\dist\launch.bat
+echo.
+echo Next steps:
+echo   1. cd dist
+echo   2. Edit input.json with your configuration
+echo   3. Double-click launch.bat (or run %APP_NAME%.exe)
+echo.
+echo For distribution:
+echo   - Zip the entire dist\ folder
+echo   - Share with end users
+echo   - Users only need to run launch.bat
+echo.
+goto :eof
+
+REM ############################################################################
+REM Main
+REM ############################################################################
+
+:main
+call :print_header
+
+REM Preflight checks
+call :check_python
+if errorlevel 1 exit /b 1
+
+call :check_required_files
+if errorlevel 1 exit /b 1
+
+REM Setup
+call :setup_venv
+call :install_dependencies
+call :install_playwright
+if errorlevel 1 exit /b 1
+
+call :verify_playwright
+if errorlevel 1 exit /b 1
+
+REM Build
+call :clean_build
+call :generate_spec
+call :run_pyinstaller
+if errorlevel 1 exit /b 1
+
+REM Post-build
+call :copy_assets
+call :copy_playwright_browsers
+call :create_launcher
+call :create_readme
+call :verify_build
+if errorlevel 1 exit /b 1
+
+REM Summary
+call :print_summary
+
+endlocal
 pause

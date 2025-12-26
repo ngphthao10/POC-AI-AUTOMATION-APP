@@ -31,14 +31,6 @@ def clear_screen():
     """Xóa màn hình console"""
     os.system('cls' if os.name == 'nt' else 'clear')
 
-def print_header():
-    """In header của ứng dụng"""
-    print("=" * 60)
-    print("    🐍 ỨNG DỤNG TỰ ĐỘNG HÓA AI 🐍")
-    print("    Tiện ích dựa trên Console")
-    print("=" * 60)
-    print()
-
 def print_menu():
     """In menu chính"""
     print("📋 MENU CHÍNH:")
@@ -218,14 +210,13 @@ def main():
     try:
         while True:
             clear_screen()
-            print_header()
             print_menu()
             
-            choice = input("Chọn một tùy chọn (1-6): ").strip()
+            choice = input("Chọn một tùy chọn (1-2): ").strip()
             
             if choice == '1':
                 csp_admin_change_role_and_branch()
-            elif choice == '6':
+            elif choice == '2':
                 print("\n👋 Tạm biệt! Cảm ơn bạn đã sử dụng ứng dụng!")
                 break
             else:

@@ -1,4 +1,4 @@
-from nova_act import NovaAct
+from nova_act import NovaAct, ActInvalidModelGenerationError, BOOL_SCHEMA
 import sys
 from pathlib import Path
 import time
@@ -7,7 +7,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from shared.logger import setup_logger
 from shared.retry_utils import with_retry
-from shared.wait_utils import wait_for_loading_complete
 from shared.error_utils import format_error_for_display
 from shared.action_counter import ActionCounter
 
@@ -21,59 +20,74 @@ class CSPRoleHandler:
         self.page = nova.page
         self.action_counter = ActionCounter(max_actions=30, step_name="RoleChange")
 
-    @with_retry(max_retries=2, retry_delay=2)
+    @with_retry(max_retries=1, retry_delay=2)
     def change_role(self, new_role: str) -> bool:
         try:
             logger.info(f"Changing role to: {new_role}")
             print(f"👤 Changing role to: {new_role}")
 
-            # Navigate to Roles tab first
+            # Step 0: Navigate to Roles tab
+            logger.debug("Step 0: Navigating to Roles tab")
+            print("  ➤ Navigating to Roles tab...")
             self.action_counter.safe_act(
                 self.nova,
                 "Click the 'Roles' tab in the Edit user modal"
             )
-            time.sleep(1)
+            time.sleep(2)
 
-            # Wait for Roles tab to load
-            if not wait_for_loading_complete(
-                self.nova,
-                timeout_seconds=20,
-                action_description="Roles tab to load"
-            ):
-                raise Exception("Roles tab failed to load")
-
-            # Step 1: Clear current role
+            # Step 1: Open role dropdown
+            logger.debug("Step 1: Opening role dropdown")
+            print("  ➤ Opening role dropdown...")
             self.action_counter.safe_act(
                 self.nova,
-                "In the Role field, click the 'x' button to clear the current role value"
+                "In the FIRST Role row (top-most), click the dropdown arrow to open the role selector"
             )
-            time.sleep(1)
-
-            # Step 2: Open role dropdown
-            self.action_counter.safe_act(
-                self.nova,
-                "Click the Role dropdown arrow to open the role selector"
-            )
-            time.sleep(1)
-
-            # Step 3: Click search box in dropdown (Nova Act)
-            self.action_counter.safe_act(
-                self.nova,
-                "Click the search input field inside the Role dropdown"
-            )
-            time.sleep(0.5)
-
-            # Step 4: Type role name to filter (Playwright - reliable typing)
-            logger.debug(f"Typing role name: {new_role}")
-            self.page.keyboard.type(new_role)
             time.sleep(1.5)
 
-            # Step 5: Select the role from filtered results
+            # Step 2: Type role name to filter (Playwright - more reliable for typing)
+            logger.debug(f"Step 2: Typing role name: {new_role}")
+            print(f"  ➤ Searching for role: {new_role}...")
+
             self.action_counter.safe_act(
                 self.nova,
-                f"In the filtered role list, click on the role option that matches '{new_role}'"
+                "CLick the select search field in the open dropdown"
             )
-            time.sleep(1)
+            time.sleep(1.5)
+
+            # Clear search field first
+            self.page.keyboard.press("Control+A")
+            self.page.keyboard.press("Backspace")
+            time.sleep(0.3)
+
+            # Type role name
+            self.page.keyboard.type(new_role, delay=100)  # Type with delay for stability
+            time.sleep(2)
+            print(f"  ✓ Typed '{new_role}'")
+
+            # Step 3: Click on the role (should be first/only result after filtering)
+            logger.debug(f"Step 3: Selecting role from filtered list")
+            print(f"  ➤ Clicking on role...")
+            self.action_counter.safe_act(
+                self.nova,
+                f"In the dropdown list, click on the FIRST visible role option (should be '{new_role}' after filtering)"
+            )
+            time.sleep(1.5)
+
+            # Verify Step 3: Role is selected
+            logger.debug("Verifying role is selected")
+            try:
+                result = self.nova.act_get(
+                    f"Look at the FIRST Role field (top-most row). Does it now show '{new_role}' as the selected value?",
+                    schema=BOOL_SCHEMA
+                )
+                if result.parsed_response:
+                    logger.debug(f"✓ Verification PASSED - Role is selected")
+                    print(f"  ✓ Role '{new_role}' selected successfully")
+                else:
+                    raise Exception(f"Role field should show '{new_role}'")
+            except ActInvalidModelGenerationError as e:
+                logger.error(f"Verification INVALID: {str(e)}")
+                raise Exception(f"Failed to verify role selection: {str(e)}")
 
             logger.info(f"Role updated successfully to: {new_role}")
             print(f"✅ Role updated to: {new_role}")

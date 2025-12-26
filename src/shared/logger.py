@@ -1,6 +1,4 @@
-"""Enhanced logging utility with file and console output"""
 import logging
-import os
 from pathlib import Path
 from datetime import datetime
 
@@ -13,24 +11,6 @@ def setup_logger(
     console_format: str = '%(levelname)s - %(message)s',
     file_format: str = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 ):
-    """
-    Setup an enhanced logger with both console and file output.
-
-    Args:
-        name: Logger name (usually __name__)
-        level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        log_to_file: Whether to log to file
-        log_dir: Directory for log files
-        console_format: Format for console output
-        file_format: Format for file output
-
-    Returns:
-        Configured logger instance
-
-    Usage:
-        logger = setup_logger(__name__, level=logging.DEBUG)
-        logger.info("This goes to console and file")
-    """
     logger = logging.getLogger(name)
     logger.setLevel(level)
 
@@ -77,20 +57,6 @@ def setup_automation_logger(
     execution_id: str = None,
     level=logging.DEBUG
 ):
-    """
-    Setup logger specifically for automation runs with execution tracking.
-
-    Args:
-        automation_name: Name of the automation (e.g., 'csp_admin')
-        execution_id: Unique execution ID
-        level: Logging level
-
-    Returns:
-        Configured logger with execution-specific log file
-
-    Usage:
-        logger = setup_automation_logger('csp_admin', execution_id='run_123')
-    """
     if not execution_id:
         execution_id = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -116,15 +82,6 @@ def setup_automation_logger(
 
 
 def get_logger(name: str) -> logging.Logger:
-    """
-    Get an existing logger or create a default one.
-
-    Args:
-        name: Logger name
-
-    Returns:
-        Logger instance
-    """
     logger = logging.getLogger(name)
 
     # If logger has no handlers, set it up with defaults

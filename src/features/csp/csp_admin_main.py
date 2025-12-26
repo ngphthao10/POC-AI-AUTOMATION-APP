@@ -4,18 +4,18 @@ from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from shared.nova_manager import NovaManager
-from shared.logger import setup_automation_logger
-from shared.screenshot_utils import ScreenshotManager
-from shared.error_utils import format_error_for_display
+from src.shared.nova_manager import NovaManager
+from src.shared.logger import setup_automation_logger
+from src.shared.screenshot_utils import ScreenshotManager
+from src.shared.error_utils import format_error_for_display
 
-from features.csp.handlers.csp_login_handler import CSPLoginHandler
-from features.csp.handlers.csp_user_search_handler import CSPUserSearchHandler
-from features.csp.handlers.csp_role_handler import CSPRoleHandler
-from features.csp.handlers.csp_branch_handler import CSPBranchHandler
-from features.csp.handlers.csp_save_handler import CSPSaveHandler
+from src.features.csp.handlers.csp_login_handler import CSPLoginHandler
+from src.features.csp.handlers.csp_user_search_handler import CSPUserSearchHandler
+from src.features.csp.handlers.csp_role_handler import CSPRoleHandler
+from src.features.csp.handlers.csp_branch_handler import CSPBranchHandler
+from src.features.csp.handlers.csp_save_handler import CSPSaveHandler
 
 load_dotenv()
 
@@ -107,14 +107,6 @@ def main(
     url: str = None,
     headless: bool = None
 ):
-    """
-    Main entry point with enhanced features
-
-    Args:
-        input_file: Path to input JSON file
-        url: CSP portal URL (optional, reads from input file)
-        headless: Run in headless mode (reads from .env if not specified)
-    """
     # Generate execution ID
     execution_id = datetime.now().strftime('%Y%m%d_%H%M%S')
 

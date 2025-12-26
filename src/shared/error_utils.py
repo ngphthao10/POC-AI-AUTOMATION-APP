@@ -1,26 +1,9 @@
-"""
-Error handling utilities for cleaner error messages
-"""
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 def extract_error_message(error_str: str) -> str:
-    """
-    Extract clean error message from complex error objects.
-
-    Handles formats like:
-    - ActAgentError(message = The actual error\n  metadata = ...)
-    - Standard exceptions
-    - Multiline errors
-
-    Args:
-        error_str: Raw error string
-
-    Returns:
-        Clean, user-friendly error message
-    """
     if not error_str:
         return "Unknown error"
 
@@ -59,15 +42,6 @@ def extract_error_message(error_str: str) -> str:
 
 
 def is_timeout_error(error: Exception) -> bool:
-    """
-    Check if error is a timeout error.
-
-    Args:
-        error: Exception object
-
-    Returns:
-        True if timeout error
-    """
     error_str = str(error).lower()
     return (
         'timeout' in error_str or
@@ -77,15 +51,6 @@ def is_timeout_error(error: Exception) -> bool:
 
 
 def is_network_error(error: Exception) -> bool:
-    """
-    Check if error is a network error.
-
-    Args:
-        error: Exception object
-
-    Returns:
-        True if network error
-    """
     error_str = str(error).lower()
     return (
         'connection' in error_str or
@@ -96,16 +61,6 @@ def is_network_error(error: Exception) -> bool:
 
 
 def format_error_for_display(error: Exception, context: str = "") -> str:
-    """
-    Format error for user-friendly display.
-
-    Args:
-        error: Exception object
-        context: Context string (e.g., "Login failed")
-
-    Returns:
-        Formatted error message
-    """
     clean_msg = extract_error_message(str(error))
 
     if is_timeout_error(error):

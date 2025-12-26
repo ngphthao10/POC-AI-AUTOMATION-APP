@@ -7,7 +7,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from shared.logger import setup_logger
 from shared.retry_utils import with_retry
-from shared.wait_utils import wait_for_loading_complete
 from shared.error_utils import format_error_for_display
 from shared.action_counter import ActionCounter
 
@@ -21,7 +20,7 @@ class CSPUserSearchHandler:
         self.page = nova.page
         self.action_counter = ActionCounter(max_actions=50, step_name="UserSearch")
 
-    @with_retry(max_retries=3, retry_delay=2)
+    @with_retry(max_retries=1, retry_delay=2)
     def search_and_open_edit(self, target_user: str) -> bool:
         """
         Search for user and open edit form with retry logic
@@ -46,6 +45,7 @@ class CSPUserSearchHandler:
 
             # Clear and type username (Playwright - secure, no username in AI logs)
             self.page.keyboard.press("Control+A")  # Select all
+            self.page.keyboard.press("Backspace")  # Select all
             self.page.keyboard.type(target_user)
             time.sleep(0.3)
             logger.debug(f"Username typed: {target_user}")

@@ -22,37 +22,6 @@ class NovaManager:
         video_quality: int = 85,
         **kwargs
     ) -> NovaAct:
-        """
-        Create NovaAct instance with enhanced features.
-
-        Args:
-            starting_page: URL to start automation
-            api_key: Nova Act API key (reads from env if not provided)
-            headless: Run in headless mode (reads from env HEADLESS if not provided)
-            record_video: Enable video recording (reads from env RECORD_VIDEO if not provided)
-            logs_directory: Directory for logs and videos (auto-generated if not provided)
-            execution_id: Unique execution ID for this run
-            video_quality: Video quality 0-100 (default 85)
-            **kwargs: Additional NovaAct parameters
-
-        Returns:
-            Configured NovaAct instance
-
-        Usage:
-            # Basic usage
-            nova = NovaManager.create("https://example.com")
-
-            # With video recording
-            nova = NovaManager.create(
-                "https://example.com",
-                record_video=True,
-                execution_id="test_run_001"
-            )
-
-            # From environment variables
-            # Set HEADLESS=true and RECORD_VIDEO=true in .env
-            nova = NovaManager.create("https://example.com")
-        """
         # Get API key
         if not api_key:
             api_key = os.getenv('NOVA_ACT_API_KEY')
@@ -118,26 +87,6 @@ class NovaManager:
         execution_id: Optional[str] = None,
         **kwargs
     ) -> NovaAct:
-        """
-        Create NovaAct instance specifically for automation runs.
-        Automatically sets up logging and video recording in organized directories.
-
-        Args:
-            automation_name: Name of the automation (e.g., 'csp_admin')
-            starting_page: URL to start automation
-            execution_id: Unique execution ID (auto-generated if not provided)
-            **kwargs: Additional parameters for create()
-
-        Returns:
-            Configured NovaAct instance
-
-        Usage:
-            nova = NovaManager.create_for_automation(
-                'csp_admin',
-                'https://portal.example.com',
-                execution_id='user_123_run_001'
-            )
-        """
         if not execution_id:
             execution_id = datetime.now().strftime('%Y%m%d_%H%M%S')
 

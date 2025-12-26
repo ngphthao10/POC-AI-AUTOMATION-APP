@@ -80,7 +80,7 @@ clean: ## Clean build artifacts
 
 build: clean install ## Build standalone executable
 	@echo "$(BLUE)Building application...$(NC)"
-	@bash build_new.sh
+	@bash build.sh
 
 build-fast: ## Build without cleaning or reinstalling
 	@echo "$(BLUE)Building application (fast mode)...$(NC)"

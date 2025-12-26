@@ -1,119 +1,75 @@
-# AI Automation Python Application
+# CSP Automation Application
 
-Ứng dụng Python tự động hóa sử dụng Amazon Nova Act để thực hiện các tác vụ quản trị CSP (Customer Service Portal) với giao diện console tương tác.
+Ứng dụng Python tự động hóa quản trị CSP (Customer Service Portal) sử dụng Amazon Nova Act AI.
 
-## 📋 Tính năng
+## Tính năng
 
-- **CSP Admin Automation**: Tự động thay đổi vai trò và chi nhánh người dùng
-- **Amazon Nova Act Integration**: AI-powered browser automation
-- **Single Worker Mode**: Xử lý tuần tự đảm bảo tính ổn định
-- **Console Interface**: Giao diện menu tương tác bằng tiếng Việt
-- **JSON Configuration**: Cấu hình dễ dàng qua file JSON
-- **Debug Support**: HTML trace files và logging chi tiết
-- **Cross-platform**: Hỗ trợ Windows, macOS, Linux
+- Tự động thay đổi vai trò và chi nhánh người dùng CSP
+- AI-powered browser automation với Amazon Nova Act
+- Console interface bằng tiếng Việt
+- JSON configuration
+- Logging và tracing chi tiết
 
-## 🚀 Cách chạy
+## Yêu cầu
 
-### Chạy trực tiếp với Python
+- **Windows 10+** (khuyến nghị - không cần code signing)
+- macOS 10.13+ (cần thêm bước bypass Gatekeeper - xem hướng dẫn dưới)
+- Python 3.10+ (nếu chạy từ source code)
+- Internet connection
+- Nova Act API key
+
+## Cài đặt & Chạy
+
+### Chạy trực tiếp
 
 ```bash
 # Cài đặt dependencies
 pip install -r requirements.txt
 
+# Cài đặt Playwright browsers
+playwright install chromium
+
 # Chạy ứng dụng
 python console_app.py
 ```
 
-### 📦 Đóng gói với PyInstaller
-
-#### Sử dụng script build tự động (Khuyến nghị)
+### Build executable
 
 **macOS/Linux:**
-
 ```bash
-chmod +x build.sh
-./build.sh
+# Build với Makefile
+make build
+
+# Hoặc chạy script trực tiếp
+bash build_new.sh
 ```
 
 **Windows:**
-
 ```cmd
 build.bat
 ```
 
-#### Thủ công
-
-#### Bước 1: Tạo virtual environment
-
+**Chạy sau khi build:**
 ```bash
-python3 -m venv venv
+cd dist
+./launch.sh       # macOS/Linux
+launch.bat        # Windows
 ```
 
-#### Bước 2: Kích hoạt virtual environment
+**Lưu ý:** Build script tự động bundle Playwright browsers (~300MB) vào dist/ để end-users không cần cài thêm gì.
 
-macOS/Linux:
+## Cấu hình
 
-```bash
-source venv/bin/activate
+### 1. Nova Act API Key
+
+Tạo file `.env`:
+```
+NOVA_ACT_API_KEY=your_api_key_here
 ```
 
-Windows:
+### 2. Input Configuration
 
-```cmd
-venv\Scripts\activate.bat
-```
-
-#### Bước 3: Cài đặt PyInstaller
-
-```bash
-pip install pyinstaller
-```
-
-#### Bước 4: Tạo file thực thi
-
-```bash
-pyinstaller --onefile --name="ai_automation_app" console_app.py
-```
-
-## 📂 Cấu trúc thư mục
-
-```
-ai_automation_python_app/
-├── console_app.py              # Ứng dụng console chính
-├── requirements.txt            # Python dependencies
-├── README.md                  # Hướng dẫn này
-├── AGENTS.md                  # Hướng dẫn cho AI coding agents
-├── build.sh                   # Script build cho macOS/Linux  
-├── build.bat                  # Script build cho Windows
-├── ai_automation_app.spec     # File cấu hình PyInstaller
-├── src/                       # Source code
-│   ├── config/
-│   │   └── nova_act_config.py # Cấu hình Nova Act API key
-│   ├── csp/
-│   │   ├── csp_admin_change_role_and_branch.py # Module automation chính
-│   │   ├── input.json         # Template cấu hình
-│   │   ├── input_test.json    # Cấu hình test
-│   │   └── input_prod.json    # Cấu hình production
-│   └── samples/
-│       └── order_a_coffee_maker.py # Nova Act sample
-├── releases/
-│   └── HƯỚNG_DẪN_SỬ_DỤNG.md  # Hướng dẫn người dùng chi tiết
-├── build/                     # Thư mục tạm (có thể xóa)
-└── dist/                      # Chứa file thực thi
-    ├── ai_automation_app      # File thực thi (macOS/Linux)
-    └── ai_automation_app.exe  # File thực thi (Windows)
-```
-
-## 🔧 Cấu hình
-
-### Nova Act API Key
-1. Lấy API key từ https://nova.amazon.com/act
-2. Cập nhật trong `src/config/nova_act_config.py`
-3. Hoặc set environment variable: `export NOVA_ACT_API_KEY="your_key"`
-
-### Input Configuration
-Tạo file `input.json` cùng thư mục với executable:
-
+Tạo file `input.json`:
 ```json
 {
   "admin_credentials": {
@@ -131,52 +87,66 @@ Tạo file `input.json` cùng thư mục với executable:
 }
 ```
 
-## 🎯 Yêu cầu hệ thống
+## Cấu trúc thư mục
 
-- **Python**: 3.10 trở lên
-- **Nova Act**: 2.0+ (được cài tự động)
-- **PyInstaller**: 6.0+ (cho build)
-- **Dung lượng**: 50MB+ cho executable
-- **Internet**: Kết nối ổn định cho Nova Act API
-- **Browser**: Chrome/Chromium (được cài tự động bởi Nova Act)
+```
+├── console_app.py          # Entry point
+├── requirements.txt        # Dependencies
+├── Makefile               # Build commands
+├── build_new.sh           # Build script
+├── csp_automation.spec    # PyInstaller config
+├── .env                   # API keys
+├── input.json             # Configuration
+├── src/                   # Source code
+│   ├── csp/              # CSP automation modules
+│   ├── features/         # Feature modules
+│   └── shared/           # Shared utilities
+├── logs/                  # Log files
+├── screenshots/           # Debug screenshots
+└── dist/                  # Build output
+```
 
-## 🌍 Cross-platform Build
+## Build commands
 
-Để tạo file thực thi cho các platform khác:
+```bash
+make build        # Build executable
+make build-fast   # Build without clean
+make package      # Build + create zip
+make clean        # Clean build artifacts
+make run          # Run dev mode
+```
 
-1. **Windows executable**: Cần build trên Windows
-2. **macOS executable**: Cần build trên macOS  
-3. **Linux executable**: Cần build trên Linux
+## Hỗ trợ
 
-**Không thể build cross-platform từ một OS!**
+Nếu gặp vấn đề, kiểm tra:
+1. File log trong `logs/`
+2. Screenshots trong `screenshots/`
+3. Cấu hình `.env` và `input.json`
 
-## � Thay đổi gần đây
+## Troubleshooting
 
-### v2.0 - Amazon Nova Act Integration
-- **Nova Act AI**: Thay thế automation thủ công bằng AI browser automation
-- **Single Worker Mode**: Chuyển từ parallel sang sequential processing
-- **Hierarchical Navigation**: Cải tiến hệ thống điều hướng chi nhánh
-- **Debug Enhancement**: HTML trace files và logging chi tiết
+### macOS: "Cannot verify that it is free from malware"
 
-### Refactoring Highlights
-- Gộp methods thành `change_user_branch_hierarchical`
-- Loại bỏ parallel workers để tăng độ tin cậy
-- Backward compatibility cho `new_branch` parameter
-- Enhanced error handling và recovery
+**Vấn đề:** macOS Gatekeeper chặn ứng dụng vì không được code-sign với Apple Developer certificate.
 
-## �📞 Hỗ trợ
+**Giải pháp 1 - Workaround cho người dùng (Khuyến nghị):**
 
-Nếu gặp vấn đề:
+Sau khi giải nén `dist.zip`, chạy lệnh sau để gỡ bỏ quarantine flag:
 
-1. **Kiểm tra Nova Act API key**: `python -c "from src.config.nova_act_config import get_nova_act_api_key; print('OK')"`
-2. **Kiểm tra file log**: `csp_automation_[timestamp].log`
-3. **Xem HTML trace files**: Trong thư mục logs
-4. **Kiểm tra cấu hình**: File `input.json` phải cùng thư mục executable
-5. **Liên hệ team**: Với log files và mô tả lỗi cụ thể
+```bash
+cd /path/to/dist
+xattr -cr .
+```
 
-## 📚 Tài liệu
+Sau đó có thể chạy `./launch.sh` bình thường.
 
-- **Hướng dẫn người dùng**: [releases/HƯỚNG_DẪN_SỬ_DỤNG.md](releases/HƯỚNG_DẪN_SỬ_DỤNG.md)
-- **Agent documentation**: [AGENTS.md](AGENTS.md)
-- **Refactoring notes**: [REFACTOR_SUMMARY.md](REFACTOR_SUMMARY.md)
-- **Nova Act docs**: [README_NOVA_ACT.md](README_NOVA_ACT.md)
+**Giải pháp 2 - Sử dụng Windows (Đơn giản nhất):**
+
+Build và phân phối trên Windows không gặp vấn đề này. Chạy `build.bat` trên máy Windows.
+
+**Giải pháp 3 - Code Signing (Tốn phí):**
+
+Nếu cần phân phối chính thức cho macOS, cần:
+- Apple Developer Account ($99/năm)
+- Code sign với `codesign` command
+- Notarize với Apple
