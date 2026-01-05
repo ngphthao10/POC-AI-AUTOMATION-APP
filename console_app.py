@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-CSP Admin Console App - Simple version
-"""
-
 import sys
 import os
 import json
@@ -39,7 +35,6 @@ def main():
     try:
         with open(input_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
-
         users = config.get('users', [])
         admin = config.get('admin_credentials', {}).get('username', 'N/A')
 
@@ -66,7 +61,7 @@ def main():
 
         # Run automation
         print("\n" + "=" * 60)
-        from features.csp.csp_admin import main as csp_main
+        from src.features.csp.csp_admin import main as csp_main
         success = csp_main(input_file=input_path)
 
         print("\n" + "=" * 60)

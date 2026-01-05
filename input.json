@@ -7,8 +7,8 @@
   "users": [
     {
       "target_user": "anh.vutu",
-      "new_role": "Base",
-      "branch_hierarchy":["VIB Bank", "South", "412"]
+      "new_role": "CSP_Inquiry",
+      "branch_hierarchy": null
     }
   ]
 }
