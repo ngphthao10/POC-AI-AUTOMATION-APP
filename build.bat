@@ -59,45 +59,14 @@ echo Step 6: Copy required files to dist folder
 copy input.json dist\ >nul 2>&1
 copy template.json dist\ >nul 2>&1
 copy .env dist\ >nul 2>&1
+copy SETUP_WINDOWS.md dist\ >nul 2>&1
 
 echo Creating output folders...
 if not exist "dist\logs\" mkdir dist\logs
 if not exist "dist\screenshots\" mkdir dist\screenshots
 
 echo.
-echo Step 7: Create README for users
-(
-echo CSP AUTOMATION - CONSOLE APP
-echo ==============================
-echo.
-echo HOW TO USE:
-echo 1. Edit input.json with your configuration
-echo 2. Double-click csp_automation.exe to run
-echo 3. Follow the prompts in the console
-echo.
-echo FOLDER STRUCTURE:
-echo - input.json: Configuration file
-echo - template.json: Template for input configuration
-echo - logs/: Automation logs
-echo - screenshots/: Debug screenshots
-echo.
-echo REQUIREMENTS:
-echo - Windows 10 or later
-echo - Internet connection for browser automation
-echo.
-) > dist\README.txt
-
-echo.
 echo ============================================================
 echo BUILD COMPLETED SUCCESSFULLY!
-echo ============================================================
-echo.
-echo Output: dist\csp_automation.exe
-echo.
-echo TO DISTRIBUTE:
-echo 1. Copy the entire 'dist' folder to Windows machine
-echo 2. Edit input.json in dist folder
-echo 3. Run csp_automation.exe
-echo.
 echo ============================================================
 pause
