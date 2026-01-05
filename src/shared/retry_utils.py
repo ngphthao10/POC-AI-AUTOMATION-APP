@@ -11,6 +11,132 @@ class RetryException(Exception):
     pass
 
 
+# ============================================================================
+# Error Classification & Formatting
+# ============================================================================
+
+def extract_error_message(error_str: str) -> str:
+    """Extract clean error message from error string"""
+    if not error_str:
+        return "Unknown error"
+
+    error_str = str(error_str).strip()
+
+    # Check if it's an ActAgentError format
+    if error_str.startswith("ActAgentError("):
+        try:
+            lines = error_str.split('\n')
+            for line in lines:
+                line = line.strip()
+                if line.startswith('message = '):
+                    # Extract the message part after "message = "
+                    message = line[10:].strip()
+                    return message
+        except Exception as e:
+            logger.warning(f"Failed to parse ActAgentError format: {e}")
+
+    # Check for other common error patterns
+    if "message:" in error_str.lower():
+        try:
+            parts = error_str.split("message:", 1)
+            if len(parts) > 1:
+                message = parts[1].strip()
+                # Remove any trailing metadata
+                for delimiter in ['\n', 'metadata', 'session_id', 'act_id']:
+                    if delimiter in message:
+                        message = message.split(delimiter)[0].strip()
+                return message
+        except Exception as e:
+            logger.warning(f"Failed to parse message: format: {e}")
+
+    # Default: return first line
+    first_line = error_str.split('\n')[0].strip()
+    return first_line if first_line else error_str
+
+
+def is_timeout_error(error: Exception) -> bool:
+    """Check if error is timeout-related"""
+    error_str = str(error).lower()
+    return (
+        'timeout' in error_str or
+        'timeouterror' in error_str or
+        'timed out' in error_str
+    )
+
+
+def is_network_error(error: Exception) -> bool:
+    """Check if error is network-related"""
+    error_str = str(error).lower()
+    network_keywords = [
+        'nameresolutionerror',
+        'connection',
+        'network',
+        'dns',
+        'unreachable',
+        'max retries exceeded',
+        'failed to resolve',
+        'httpsconnectionpool',
+        'connectionerror',
+        'refused'
+    ]
+    return any(keyword in error_str for keyword in network_keywords)
+
+
+def get_error_category(error: Exception) -> str:
+    """Classify error into category"""
+    error_str = str(error).lower()
+
+    if 'nameresolutionerror' in error_str or 'dns' in error_str or 'failed to resolve' in error_str:
+        return 'DNS_ERROR'
+    elif 'connection' in error_str or 'refused' in error_str:
+        return 'CONNECTION_ERROR'
+    elif 'timeout' in error_str or 'timed out' in error_str:
+        return 'TIMEOUT_ERROR'
+    elif 'max retries exceeded' in error_str:
+        return 'MAX_RETRIES_ERROR'
+    else:
+        return 'UNKNOWN_ERROR'
+
+
+def format_error_for_display(error: Exception, context: str = "") -> str:
+    """Format error for user-friendly display"""
+    clean_msg = extract_error_message(str(error))
+
+    if is_timeout_error(error):
+        error_type = "⏱️ Timeout"
+    elif is_network_error(error):
+        error_type = "🌐 Network Error"
+    else:
+        error_type = "❌ Error"
+
+    if context:
+        return f"{error_type} ({context}): {clean_msg}"
+    else:
+        return f"{error_type}: {clean_msg}"
+
+
+def get_retry_config_for_error(error: Exception) -> tuple:
+    """
+    Get recommended retry configuration for error type
+    Returns: (should_retry, max_retries, initial_delay)
+    """
+    category = get_error_category(error)
+
+    retry_configs = {
+        'DNS_ERROR': (True, 5, 5),  # Retry 5 times, start with 5s delay
+        'CONNECTION_ERROR': (True, 4, 3),  # Retry 4 times, 3s delay
+        'TIMEOUT_ERROR': (True, 3, 2),  # Retry 3 times, 2s delay
+        'MAX_RETRIES_ERROR': (False, 0, 0),  # Already retried
+        'UNKNOWN_ERROR': (True, 2, 2)
+    }
+
+    return retry_configs.get(category, (True, 2, 2))
+
+
+# ============================================================================
+# Basic Retry Decorator (kept for backward compatibility in handlers)
+# ============================================================================
+
 def with_retry(
     func: Callable = None,
     max_retries: int = 3,
@@ -36,11 +162,6 @@ def with_retry(
         @with_retry(max_retries=3, retry_delay=2)
         def my_function():
             # code that might fail
-            pass
-
-        # Or with custom config
-        @with_retry(max_retries=5, backoff_multiplier=1.5, exceptions_to_retry=(TimeoutError,))
-        def another_function():
             pass
     """
     def decorator(fn):
@@ -105,132 +226,61 @@ def with_retry(
         return decorator(func)
 
 
-def retry_on_failure(
-    action_func: Callable,
-    max_retries: int = 3,
-    retry_delay: int = 2,
-    action_name: str = "Action"
-) -> Any:
-    """
-    Execute a function with retry logic (non-decorator version).
+# ============================================================================
+# Network Circuit Breaker
+# ============================================================================
 
-    Args:
-        action_func: Function to execute
-        max_retries: Maximum number of retry attempts
-        retry_delay: Delay between retries in seconds
-        action_name: Name of the action for logging
+class NetworkCircuitBreaker:
+    """Circuit breaker for network operations"""
 
-    Returns:
-        Result from action_func
+    def __init__(self, failure_threshold: int = 3, cooldown_seconds: int = 60):
+        self.failure_count = 0
+        self.failure_threshold = failure_threshold
+        self.cooldown_seconds = cooldown_seconds
+        self.last_failure_time = None
+        self.is_open = False
 
-    Raises:
-        RetryException: If all retries fail
+    def call(self, func: Callable, *args, **kwargs) -> Any:
+        """Execute function with circuit breaker protection"""
+        # If circuit is open, check if cooldown passed
+        if self.is_open:
+            if self.last_failure_time is None:
+                elapsed = float('inf')
+            else:
+                elapsed = time.time() - self.last_failure_time
 
-    Usage:
-        result = retry_on_failure(
-            lambda: my_risky_operation(),
-            max_retries=3,
-            action_name="Database query"
-        )
-    """
-    last_exception = None
+            if elapsed < self.cooldown_seconds:
+                remaining = self.cooldown_seconds - int(elapsed)
+                raise Exception(
+                    f"⚡ Circuit breaker is OPEN. Network appears down. "
+                    f"Wait {remaining}s before retry..."
+                )
+            else:
+                # Try to close circuit (half-open state)
+                self.is_open = False
+                logger.info("Circuit breaker: Attempting recovery (half-open state)")
+                print("🔄 Circuit breaker: Attempting recovery...")
 
-    for attempt in range(1, max_retries + 1):
         try:
-            logger.debug(f"Executing {action_name} (attempt {attempt}/{max_retries})")
-
-            if attempt > 1:
-                print(f"🔄 {action_name} - retry attempt {attempt}/{max_retries}")
-
-            result = action_func()
-
-            if attempt > 1:
-                logger.info(f"{action_name} succeeded on attempt {attempt}")
-                print(f"✅ {action_name} succeeded on attempt {attempt}")
-
+            result = func(*args, **kwargs)
+            # Success → reset counter
+            if self.failure_count > 0:
+                logger.info(f"Circuit breaker: Success after {self.failure_count} failures, resetting")
+                print(f"✅ Circuit breaker: Recovered after {self.failure_count} failures")
+            self.failure_count = 0
             return result
 
         except Exception as e:
-            last_exception = e
-            logger.warning(f"{action_name} attempt {attempt} failed: {str(e)}")
-            print(f"⚠️ Attempt {attempt} failed: {str(e)[:100]}")
+            if is_network_error(e):
+                self.failure_count += 1
+                self.last_failure_time = time.time()
 
-            if attempt < max_retries:
-                logger.debug(f"Waiting {retry_delay}s before retry...")
-                print(f"⏳ Waiting {retry_delay}s before retry...")
-                time.sleep(retry_delay * attempt)  # Linear backoff
-
-    # All retries exhausted
-    error_msg = f"{action_name} failed after {max_retries} attempts. Last error: {last_exception}"
-    logger.error(error_msg)
-    print(f"❌ {action_name} failed after all attempts")
-    raise RetryException(error_msg) from last_exception
-
-
-class RetryStrategy:
-    """
-    Configurable retry strategy with multiple backoff options.
-
-    Usage:
-        strategy = RetryStrategy(max_retries=5, strategy='exponential')
-        result = strategy.execute(my_function, arg1, arg2)
-    """
-
-    STRATEGIES = ['linear', 'exponential', 'fixed']
-
-    def __init__(
-        self,
-        max_retries: int = 3,
-        base_delay: int = 2,
-        strategy: str = 'exponential',
-        max_delay: int = 60
-    ):
-        """
-        Initialize retry strategy.
-
-        Args:
-            max_retries: Maximum retry attempts
-            base_delay: Base delay in seconds
-            strategy: 'linear', 'exponential', or 'fixed'
-            max_delay: Maximum delay cap in seconds
-        """
-        if strategy not in self.STRATEGIES:
-            raise ValueError(f"Strategy must be one of {self.STRATEGIES}")
-
-        self.max_retries = max_retries
-        self.base_delay = base_delay
-        self.strategy = strategy
-        self.max_delay = max_delay
-
-    def get_delay(self, attempt: int) -> float:
-        """Calculate delay for given attempt number."""
-        if self.strategy == 'fixed':
-            delay = self.base_delay
-        elif self.strategy == 'linear':
-            delay = self.base_delay * attempt
-        else:  # exponential
-            delay = self.base_delay * (2 ** (attempt - 1))
-
-        # Cap at max_delay
-        return min(delay, self.max_delay)
-
-    def execute(self, func: Callable, *args, **kwargs) -> Any:
-        """Execute function with configured retry strategy."""
-        last_exception = None
-
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                return func(*args, **kwargs)
-            except Exception as e:
-                last_exception = e
-
-                if attempt < self.max_retries:
-                    delay = self.get_delay(attempt)
-                    logger.warning(
-                        f"Attempt {attempt} failed, retrying in {delay}s (strategy: {self.strategy})"
+                if self.failure_count >= self.failure_threshold:
+                    self.is_open = True
+                    logger.error(
+                        f"Circuit breaker OPENED after {self.failure_count} consecutive network failures"
                     )
-                    time.sleep(delay)
+                    print(f"⚡ Circuit breaker OPEN after {self.failure_count} network failures")
+                    print(f"   Will wait {self.cooldown_seconds}s before retry...")
 
-        raise RetryException(
-            f"All {self.max_retries} attempts failed"
-        ) from last_exception
+            raise

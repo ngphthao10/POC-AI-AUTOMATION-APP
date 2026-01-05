@@ -1,0 +1,18 @@
+{
+  "admin_credentials": {
+    "username": "admin_username",
+    "password": "admin_password",
+    "csp_admin_url": "https://csp-portal.com/portal/users/list"
+  },
+  "users": [
+    {
+      "target_user": "user1@example.com",
+      "new_role": "CSP-RB-TELLER",
+      "branch_hierarchy": [
+        "VIB Bank",
+        "North",
+        "002_HA NOI"
+      ]
+    }
+  ]
+}

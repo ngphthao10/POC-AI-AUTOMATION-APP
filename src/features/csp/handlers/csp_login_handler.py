@@ -6,8 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from shared.logger import setup_logger
-from shared.retry_utils import with_retry
-from shared.error_utils import format_error_for_display
+from shared.retry_utils import format_error_for_display
 from shared.screenshot_utils import capture_screenshot_on_error
 
 logger = setup_logger(__name__)
@@ -20,14 +19,13 @@ class CSPLoginHandler:
         self.page = nova.page
         self.screenshot_manager = screenshot_manager
 
-    @with_retry(max_retries=3, retry_delay=2)
     def login(self, username: str, password: str) -> bool:
         try:
             logger.info(f"Starting login for user: {username}")
             print(f"🔐 Logging in as: {username}")
 
             # Wait for page load
-            time.sleep(2)
+            time.sleep(5)
 
             # Fill username
             if not self._fill_username(username):

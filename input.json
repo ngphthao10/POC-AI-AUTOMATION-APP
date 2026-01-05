@@ -6,9 +6,9 @@
   },
   "users": [
     {
-      "target_user": "hang.maithuy2",
-      "new_role": "Limits",
-      "branch_hierarchy": null
+      "target_user": "anh.vutu",
+      "new_role": "Base",
+      "branch_hierarchy":["VIB Bank", "South", "412"]
     }
   ]
 }

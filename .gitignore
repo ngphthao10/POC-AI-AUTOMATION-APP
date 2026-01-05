@@ -48,3 +48,6 @@ screenshots/
 test_screenshots/
 videos/
 .claude
+
+backup*/
+workflow_states

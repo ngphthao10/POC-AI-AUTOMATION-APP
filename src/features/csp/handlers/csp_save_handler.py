@@ -6,8 +6,7 @@ import time
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from shared.logger import setup_logger
-from shared.retry_utils import with_retry
-from shared.error_utils import format_error_for_display
+from shared.retry_utils import format_error_for_display
 
 logger = setup_logger(__name__)
 
@@ -17,7 +16,6 @@ class CSPSaveHandler:
     def __init__(self, nova: NovaAct):
         self.nova = nova
 
-    @with_retry(max_retries=2, retry_delay=2)
     def save_changes(self) -> bool:
         try:
             logger.info("Saving changes...")

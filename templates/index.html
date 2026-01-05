@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSP Admin Automation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="max-w-5xl mx-auto p-6">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-2xl font-semibold text-gray-900 mb-2">CSP Admin Automation</h1>
+            <p class="text-gray-600">Tự động hóa thay đổi vai trò và chi nhánh người dùng</p>
+        </div>
+
+        <!-- Config Section -->
+        <div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+            <h2 class="text-lg font-medium text-gray-900 mb-4">Cấu hình</h2>
+
+            <!-- Buttons -->
+            <div class="flex flex-wrap gap-2 mb-4">
+                <button onclick="loadConfig()" class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition">
+                    <i data-lucide="folder-open" class="w-4 h-4"></i>
+                    <span>Tải cấu hình</span>
+                </button>
+                <button onclick="document.getElementById('fileInput').click()" class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                    <span>Upload file</span>
+                </button>
+                <button onclick="downloadTemplate()" class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                    <span>Tải mẫu</span>
+                </button>
+                <button onclick="saveConfig()" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition">
+                    <i data-lucide="save" class="w-4 h-4"></i>
+                    <span>Lưu</span>
+                </button>
+            </div>
+
+            <input type="file" id="fileInput" accept=".json" class="hidden" onchange="uploadFile(event)">
+
+            <!-- Editor -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Nội dung JSON:</label>
+                <textarea id="configEditor" rows="20" class="w-full p-3 border border-gray-300 rounded-md font-mono text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"></textarea>
+            </div>
+
+            <!-- User List -->
+            <div id="userSummary" class="hidden">
+                <div class="border-t pt-4">
+                    <h3 class="text-sm font-medium text-gray-900 mb-3">Danh sách người dùng</h3>
+                    <div id="userList" class="space-y-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Run Section -->
+        <div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+            <h2 class="text-lg font-medium text-gray-900 mb-4">Chạy automation</h2>
+
+            <button id="runButton" onclick="runAutomation()" class="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                <i data-lucide="play" class="w-5 h-5"></i>
+                <span class="font-medium">Bắt đầu</span>
+            </button>
+
+            <!-- Status -->
+            <div id="statusSection" class="hidden mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <div class="flex items-center gap-3">
+                    <div class="animate-spin">
+                        <i data-lucide="loader-2" class="w-5 h-5 text-blue-600"></i>
+                    </div>
+                    <span class="text-blue-900 font-medium">Đang chạy automation...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs -->
+        <div id="logsSection" class="hidden bg-white border border-gray-200 rounded-lg p-6 mb-6">
+            <div class="flex items-center gap-2 mb-4">
+                <i data-lucide="terminal" class="w-5 h-5 text-gray-600"></i>
+                <h2 class="text-lg font-medium text-gray-900">Logs</h2>
+            </div>
+            <div id="logsList" class="bg-gray-900 rounded-md p-4 max-h-80 overflow-y-auto font-mono text-sm text-green-400"></div>
+        </div>
+
+        <!-- Result -->
+        <div id="resultSection" class="hidden">
+            <div id="successResult" class="hidden bg-green-50 border border-green-200 rounded-lg p-4">
+                <div class="flex items-start gap-3">
+                    <i data-lucide="check-circle" class="w-5 h-5 text-green-600 mt-0.5"></i>
+                    <div>
+                        <h3 class="font-medium text-green-900">Hoàn thành thành công</h3>
+                        <p class="text-sm text-green-700 mt-1">Kiểm tra thư mục logs/ và screenshots/ để xem chi tiết</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="errorResult" class="hidden bg-red-50 border border-red-200 rounded-lg p-4">
+                <div class="flex items-start gap-3">
+                    <i data-lucide="alert-circle" class="w-5 h-5 text-red-600 mt-0.5"></i>
+                    <div>
+                        <h3 class="font-medium text-red-900">Có lỗi xảy ra</h3>
+                        <p class="text-sm text-red-700 mt-1">Kiểm tra thư mục logs/ và screenshots/ để xem chi tiết lỗi</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notificationContainer" class="fixed top-4 right-4 z-50"></div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        let statusCheckInterval = null;
+
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/load-config');
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('configEditor').value = JSON.stringify(data.config, null, 2);
+                    updateUserSummary(data.config);
+                    showNotification('Đã tải cấu hình', 'success');
+                } else {
+                    showNotification(data.error, 'error');
+                }
+            } catch (error) {
+                showNotification('Lỗi kết nối: ' + error.message, 'error');
+            }
+        }
+
+        async function saveConfig() {
+            try {
+                const configText = document.getElementById('configEditor').value;
+                const config = JSON.parse(configText);
+
+                const response = await fetch('/api/save-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    updateUserSummary(config);
+                    showNotification('Đã lưu cấu hình', 'success');
+                } else {
+                    showNotification(data.error, 'error');
+                }
+            } catch (error) {
+                showNotification('Lỗi: ' + error.message, 'error');
+            }
+        }
+
+        async function uploadFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/upload-config', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('configEditor').value = JSON.stringify(data.config, null, 2);
+                    updateUserSummary(data.config);
+                    showNotification('Upload thành công', 'success');
+                } else {
+                    showNotification(data.error, 'error');
+                }
+            } catch (error) {
+                showNotification('Lỗi upload: ' + error.message, 'error');
+            }
+
+            event.target.value = '';
+        }
+
+        function downloadTemplate() {
+            window.location.href = '/api/download-template';
+            showNotification('Đang tải file...', 'info');
+        }
+
+        function updateUserSummary(config) {
+            const users = config.users || [];
+            const userList = document.getElementById('userList');
+            const userSummary = document.getElementById('userSummary');
+
+            if (users.length > 0) {
+                userSummary.classList.remove('hidden');
+                userList.innerHTML = users.map((user, i) => {
+                    const branch = user.branch_hierarchy ? user.branch_hierarchy[user.branch_hierarchy.length - 1] : 'N/A';
+                    const role = user.new_role || 'Không đổi';
+                    return `
+                        <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-md border border-gray-200">
+                            <div class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                                ${i + 1}
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="font-medium text-gray-900">${user.target_user}</div>
+                                <div class="text-sm text-gray-600 mt-1">
+                                    <span>Chi nhánh: <span class="font-medium">${branch}</span></span>
+                                    <span class="mx-2">•</span>
+                                    <span>Vai trò: <span class="font-medium">${role}</span></span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                userSummary.classList.add('hidden');
+            }
+        }
+
+        async function runAutomation() {
+            try {
+                const response = await fetch('/api/run-automation', {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('runButton').disabled = true;
+                    document.getElementById('statusSection').classList.remove('hidden');
+                    document.getElementById('logsSection').classList.remove('hidden');
+                    document.getElementById('resultSection').classList.add('hidden');
+
+                    lucide.createIcons();
+                    statusCheckInterval = setInterval(checkAutomationStatus, 1000);
+                } else {
+                    showNotification(data.error, 'error');
+                }
+            } catch (error) {
+                showNotification('Lỗi: ' + error.message, 'error');
+            }
+        }
+
+        async function checkAutomationStatus() {
+            try {
+                const response = await fetch('/api/automation-status');
+                const data = await response.json();
+
+                const logsList = document.getElementById('logsList');
+                logsList.innerHTML = data.logs.map(log =>
+                    `<div class="mb-1">${escapeHtml(log)}</div>`
+                ).join('');
+                logsList.scrollTop = logsList.scrollHeight;
+
+                if (!data.running && data.success !== null) {
+                    clearInterval(statusCheckInterval);
+                    document.getElementById('runButton').disabled = false;
+                    document.getElementById('statusSection').classList.add('hidden');
+                    document.getElementById('resultSection').classList.remove('hidden');
+
+                    if (data.success) {
+                        document.getElementById('successResult').classList.remove('hidden');
+                        document.getElementById('errorResult').classList.add('hidden');
+                    } else {
+                        document.getElementById('successResult').classList.add('hidden');
+                        document.getElementById('errorResult').classList.remove('hidden');
+                    }
+
+                    lucide.createIcons();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        function showNotification(message, type) {
+            const container = document.getElementById('notificationContainer');
+
+            const icons = {
+                success: 'check-circle',
+                error: 'x-circle',
+                info: 'info'
+            };
+
+            const colors = {
+                success: 'bg-green-50 border-green-200 text-green-900',
+                error: 'bg-red-50 border-red-200 text-red-900',
+                info: 'bg-blue-50 border-blue-200 text-blue-900'
+            };
+
+            const iconColors = {
+                success: 'text-green-600',
+                error: 'text-red-600',
+                info: 'text-blue-600'
+            };
+
+            const notification = document.createElement('div');
+            notification.className = `${colors[type]} border rounded-lg p-4 mb-2 shadow-sm flex items-center gap-3 transition-opacity duration-300`;
+            notification.innerHTML = `
+                <i data-lucide="${icons[type]}" class="w-5 h-5 ${iconColors[type]}"></i>
+                <span class="font-medium">${message}</span>
+            `;
+
+            container.appendChild(notification);
+            lucide.createIcons();
+
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        window.addEventListener('load', () => {
+            loadConfig();
+        });
+    </script>
+</body>
+</html>

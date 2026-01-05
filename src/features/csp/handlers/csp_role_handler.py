@@ -6,9 +6,7 @@ import time
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from shared.logger import setup_logger
-from shared.retry_utils import with_retry
-from shared.error_utils import format_error_for_display
-from shared.action_counter import ActionCounter
+from shared.retry_utils import format_error_for_display
 
 logger = setup_logger(__name__)
 
@@ -18,9 +16,7 @@ class CSPRoleHandler:
     def __init__(self, nova: NovaAct):
         self.nova = nova
         self.page = nova.page
-        self.action_counter = ActionCounter(max_actions=30, step_name="RoleChange")
 
-    @with_retry(max_retries=1, retry_delay=2)
     def change_role(self, new_role: str) -> bool:
         try:
             logger.info(f"Changing role to: {new_role}")
@@ -29,29 +25,32 @@ class CSPRoleHandler:
             # Step 0: Navigate to Roles tab
             logger.debug("Step 0: Navigating to Roles tab")
             print("  ➤ Navigating to Roles tab...")
-            self.action_counter.safe_act(
-                self.nova,
-                "Click the 'Roles' tab in the Edit user modal"
-            )
+            self.nova.act("Click the 'Roles' tab in the Edit user modal")
             time.sleep(2)
+
+            # Check if role is already correct
+            logger.debug(f"Checking if role is already set to: {new_role}")
+            print(f"  ➤ Checking current role...")
+            result = self.nova.act_get(
+                f"Look at the FIRST Role field (top-most row). Does it already show '{new_role}'?",
+                schema=BOOL_SCHEMA
+            )
+            if result.parsed_response:
+                logger.info(f"Role already set to: {new_role}. Skipping update.")
+                print(f"  ✓ Role already set to: {new_role}. No changes needed.")
+                return True
 
             # Step 1: Open role dropdown
             logger.debug("Step 1: Opening role dropdown")
             print("  ➤ Opening role dropdown...")
-            self.action_counter.safe_act(
-                self.nova,
-                "In the FIRST Role row (top-most), click the dropdown arrow to open the role selector"
-            )
+            self.nova.act("In the FIRST Role row (top-most), click the dropdown arrow to open the role selector")
             time.sleep(1.5)
 
             # Step 2: Type role name to filter (Playwright - more reliable for typing)
             logger.debug(f"Step 2: Typing role name: {new_role}")
             print(f"  ➤ Searching for role: {new_role}...")
 
-            self.action_counter.safe_act(
-                self.nova,
-                "CLick the select search field in the open dropdown"
-            )
+            self.nova.act("CLick the select search field in the open dropdown")
             time.sleep(1.5)
 
             # Clear search field first
@@ -67,10 +66,7 @@ class CSPRoleHandler:
             # Step 3: Click on the role (should be first/only result after filtering)
             logger.debug(f"Step 3: Selecting role from filtered list")
             print(f"  ➤ Clicking on role...")
-            self.action_counter.safe_act(
-                self.nova,
-                f"In the dropdown list, click on the FIRST visible role option (should be '{new_role}' after filtering)"
-            )
+            self.nova.act(f"In the dropdown list, click on the FIRST visible role option (should be '{new_role}' after filtering)")
             time.sleep(1.5)
 
             # Verify Step 3: Role is selected
