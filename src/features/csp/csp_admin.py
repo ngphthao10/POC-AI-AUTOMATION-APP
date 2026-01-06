@@ -1,8 +1,3 @@
-"""
-CSP Admin v2 - Simple wrapper approach
-Handlers gốc GIỮ NGUYÊN, chỉ thêm wrapper layer
-"""
-
 import json
 import sys
 from pathlib import Path
@@ -17,7 +12,6 @@ from src.shared.logger import setup_automation_logger
 from src.shared.screenshot_utils import ScreenshotManager
 from src.shared.handler_wrapper import HandlerWrapper
 
-# Import handlers GỐC - KHÔNG SỬA
 from src.features.csp.handlers.csp_login_handler import CSPLoginHandler
 from src.features.csp.handlers.csp_user_search_handler import CSPUserSearchHandler
 from src.features.csp.handlers.csp_role_handler import CSPRoleHandler
@@ -38,12 +32,7 @@ def process_user_simple(
     logger = None,
     execution_id: str = None
 ) -> dict:
-    """
-    Process user với wrapper approach
-    Handlers gốc GIỮ NGUYÊN 100%
-    """
 
-    # Create wrapper
     wrapper = HandlerWrapper()
 
     logger.info(f"Processing user: {target_user}")
@@ -54,7 +43,7 @@ def process_user_simple(
     result = {'success': False}
 
     try:
-        # Step 1: Login (handler gốc)
+        # Step 1: Login
         login_handler = CSPLoginHandler(nova, screenshot_manager=screenshot_manager)
         success = wrapper.execute_with_retry(
             step_name="login",
@@ -67,7 +56,7 @@ def process_user_simple(
             result['failed_steps'].append("login")
             return result
 
-        # Step 2: Search user (handler gốc)
+        # Step 2: Search user
         search_handler = CSPUserSearchHandler(nova)
         success = wrapper.execute_with_retry(
             step_name="search_user",
@@ -83,7 +72,7 @@ def process_user_simple(
         if screenshot_manager:  
             screenshot_manager.capture(nova, step_name="edit_form_opened")
 
-        # Step 3: Change role (handler gốc, optional)
+        # Step 3: Change role (optional)
         if new_role:
             role_handler = CSPRoleHandler(nova)
             success = wrapper.execute_with_retry(
@@ -96,7 +85,7 @@ def process_user_simple(
                 result['failed_steps'].append("change_role")
                 return result
 
-        # Step 4: Change branch (handler gốc, optional)
+        # Step 4: Change branch (optional)
         if branch_hierarchy:
             branch_handler = CSPBranchHandler(nova)
             success = wrapper.execute_with_retry(
@@ -113,7 +102,7 @@ def process_user_simple(
         if screenshot_manager:
             screenshot_manager.capture(nova, step_name="before_save")
 
-        # Step 5: Save changes (handler gốc)
+        # Step 5: Save changes 
         save_handler = CSPSaveHandler(nova)
         success = wrapper.execute_with_retry(
             step_name="save_changes",
@@ -210,11 +199,6 @@ def main(
     url: str = None,
     execution_id: str = None
 ):
-    """
-    Main function - Interactive continuous flow
-    Chạy liên tục, nếu success thì hỏi tiếp tục, nếu failed thì hỏi retry
-    """
-
     # Generate execution ID
     if not execution_id:
         execution_id = datetime.now().strftime('%Y%m%d_%H%M%S')
