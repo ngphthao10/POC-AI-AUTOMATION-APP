@@ -21,7 +21,7 @@ from src.features.csp.handlers.csp_save_handler import CSPSaveHandler
 load_dotenv()
 
 
-def process_user_simple(
+def process_user(
     nova,
     admin_username: str,
     admin_password: str,
@@ -163,7 +163,7 @@ def process_single_user(
         logger.info("Nova session started")
 
         # Process user
-        result = process_user_simple(
+        result = process_user(
             nova=nova,
             admin_username=admin_creds['username'],
             admin_password=admin_creds['password'],

@@ -4,6 +4,15 @@ import os
 import json
 from dotenv import load_dotenv
 
+# Set Playwright browsers path for portable distribution
+if getattr(sys, 'frozen', False):
+    # Running as compiled exe
+    app_dir = os.path.dirname(sys.executable)
+    playwright_browsers = os.path.join(app_dir, 'ms-playwright')
+    if os.path.exists(playwright_browsers):
+        os.environ['PLAYWRIGHT_BROWSERS_PATH'] = playwright_browsers
+        print(f"📦 Using bundled Playwright browsers from: {playwright_browsers}")
+
 load_dotenv()
 
 

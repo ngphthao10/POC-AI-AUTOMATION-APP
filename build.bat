@@ -58,7 +58,26 @@ pyinstaller --name=csp_automation ^
     console_app.py
 
 echo.
-echo Step 6: Copy required files to dist folder
+echo Step 6: Copy Playwright browsers to dist folder
+echo This will make the app portable (no setup needed on target machine)
+echo.
+set PLAYWRIGHT_BROWSERS_SRC=%USERPROFILE%\AppData\Local\ms-playwright
+set PLAYWRIGHT_BROWSERS_DEST=dist\ms-playwright
+
+if exist "%PLAYWRIGHT_BROWSERS_SRC%\" (
+    echo Found Playwright browsers at: %PLAYWRIGHT_BROWSERS_SRC%
+    echo Copying to dist folder (this may take a few minutes)...
+    xcopy /E /I /Y /Q "%PLAYWRIGHT_BROWSERS_SRC%" "%PLAYWRIGHT_BROWSERS_DEST%"
+    echo ✓ Playwright browsers copied successfully
+) else (
+    echo ERROR: Playwright browsers not found!
+    echo Please run: playwright install chromium
+    pause
+    exit /b 1
+)
+
+echo.
+echo Step 7: Copy required files to dist folder
 copy input.json dist\ >nul 2>&1
 copy template.json dist\ >nul 2>&1
 copy .env dist\ >nul 2>&1
@@ -71,5 +90,15 @@ if not exist "dist\screenshots\" mkdir dist\screenshots
 echo.
 echo ============================================================
 echo BUILD COMPLETED SUCCESSFULLY!
+echo ============================================================
+echo.
+echo Package contents:
+echo   ✓ csp_automation.exe
+echo   ✓ Playwright browsers (ms-playwright folder - ~400MB)
+echo   ✓ Configuration files (input.json, .env, template.json)
+echo   ✓ Empty logs and screenshots folders
+echo.
+echo IMPORTANT: Zip the entire dist\ folder to distribute
+echo Target machine does NOT need to install Playwright
 echo ============================================================
 pause
