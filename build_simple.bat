@@ -31,9 +31,12 @@ pyinstaller --name=csp_automation ^
     --add-data "input.json;." ^
     --add-data ".env;." ^
     --add-data "template.json;." ^
+    --add-data "venv\Lib\site-packages\certifi\cacert.pem;certifi" ^
     --hidden-import=nova_act ^
     --hidden-import=playwright ^
+    --hidden-import=playwright.sync_api ^
     --hidden-import=certifi ^
+    --collect-data certifi ^
     --clean ^
     --noconfirm ^
     console_app.py
