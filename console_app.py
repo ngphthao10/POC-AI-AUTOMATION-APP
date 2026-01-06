@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 import sys
 import os
-import json
-from dotenv import load_dotenv
 
-# Set Playwright browsers path for portable distribution
+# CRITICAL: Set Playwright browsers path BEFORE any imports
 if getattr(sys, 'frozen', False):
     # Running as compiled exe
     app_dir = os.path.dirname(sys.executable)
@@ -12,6 +10,16 @@ if getattr(sys, 'frozen', False):
     if os.path.exists(playwright_browsers):
         os.environ['PLAYWRIGHT_BROWSERS_PATH'] = playwright_browsers
         print(f"📦 Using bundled Playwright browsers from: {playwright_browsers}")
+    else:
+        print(f"⚠️  WARNING: Browsers not found at: {playwright_browsers}")
+        print(f"    App may fail if Playwright is not installed globally")
+
+# Skip Playwright auto-install (browsers already exist)
+os.environ['PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD'] = '1'
+
+# Now safe to import other modules
+import json
+from dotenv import load_dotenv
 
 load_dotenv()
 
