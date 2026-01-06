@@ -68,7 +68,7 @@ if exist "%PLAYWRIGHT_BROWSERS_SRC%\" (
     echo Found Playwright browsers at: %PLAYWRIGHT_BROWSERS_SRC%
     echo Copying to dist folder (this may take a few minutes)...
     xcopy /E /I /Y /Q "%PLAYWRIGHT_BROWSERS_SRC%" "%PLAYWRIGHT_BROWSERS_DEST%"
-    echo ✓ Playwright browsers copied successfully
+    echo [OK] Playwright browsers copied successfully
 ) else (
     echo ERROR: Playwright browsers not found!
     echo Please run: playwright install chromium
@@ -93,10 +93,10 @@ echo BUILD COMPLETED SUCCESSFULLY!
 echo ============================================================
 echo.
 echo Package contents:
-echo   ✓ csp_automation.exe
-echo   ✓ Playwright browsers (ms-playwright folder - ~400MB)
-echo   ✓ Configuration files (input.json, .env, template.json)
-echo   ✓ Empty logs and screenshots folders
+echo   [OK] csp_automation.exe
+echo   [OK] Playwright browsers (ms-playwright folder - ~400MB)
+echo   [OK] Configuration files (input.json, .env, template.json)
+echo   [OK] Empty logs and screenshots folders
 echo.
 echo IMPORTANT: Zip the entire dist\ folder to distribute
 echo Target machine does NOT need to install Playwright
