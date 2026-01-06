@@ -6,20 +6,20 @@ echo Building CSP Automation Console App for Windows
 echo ============================================================
 echo.
 
-echo Step 1: Setup virtual environment
-if exist "venv\" (
-    echo Virtual environment found, activating...
-    call venv\Scripts\activate.bat
-) else (
-    echo Creating virtual environment...
-    python -m venv venv
-    call venv\Scripts\activate.bat
+echo Step 1: Activate existing virtual environment
+if not exist "venv\" (
+    echo ERROR: Virtual environment not found!
+    echo Please create venv first and add VIB certificate to:
+    echo venv\Lib\site-packages\certifi\cacert.pem
+    pause
+    exit /b 1
 )
+echo Using existing virtual environment with VIB certificate...
+call venv\Scripts\activate.bat
 
 echo.
-echo Step 2: Install dependencies
-python -m pip install --upgrade pip --quiet
-pip install -r requirements.txt --quiet
+echo Step 2: Verify dependencies (skip reinstall to preserve cert)
+echo Dependencies already installed in venv
 
 echo.
 echo Step 3: Install Playwright browsers
@@ -40,16 +40,19 @@ if exist "csp_automation.spec" (
 )
 
 echo.
-echo Step 5: Build executable with PyInstaller
+echo Step 5: Build executable with PyInstaller (including VIB cert)
 pyinstaller --name=csp_automation ^
     --onefile ^
     --console ^
     --add-data "input.json;." ^
     --add-data ".env;." ^
     --add-data "template.json;." ^
+    --add-data "venv\Lib\site-packages\certifi\cacert.pem;certifi" ^
     --hidden-import=nova_act ^
     --hidden-import=playwright ^
     --hidden-import=playwright.sync_api ^
+    --hidden-import=certifi ^
+    --collect-data certifi ^
     --clean ^
     --noconfirm ^
     console_app.py
