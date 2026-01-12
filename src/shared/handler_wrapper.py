@@ -1,7 +1,3 @@
-"""
-Handler Wrapper - Wrap handler calls với retry logic
-"""
-
 import logging
 import time
 from typing import Callable
@@ -19,11 +15,6 @@ circuit_breaker = NetworkCircuitBreaker(failure_threshold=3, cooldown_seconds=60
 
 
 class HandlerWrapper:
-    """
-    Wrapper cho handler calls - thêm retry logic
-    Handlers gốc GIỮ NGUYÊN 100%
-    """
-
     def execute_with_retry(
         self,
         step_name: str,

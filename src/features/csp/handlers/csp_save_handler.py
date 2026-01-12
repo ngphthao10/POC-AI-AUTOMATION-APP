@@ -34,17 +34,17 @@ class CSPSaveHandler:
             print(error_msg)
             raise
 
-    def close_modal(self) -> bool:
-        try:
-            logger.info("Closing modal...")
-            print("🚪 Closing modal...")
+    # def close_modal(self) -> bool:
+    #     try:
+    #         logger.info("Closing modal...")
+    #         print("🚪 Closing modal...")
 
-            self.nova.act("Click the Cancel button or X button to close the modal")
-            time.sleep(1)
+    #         self.nova.act("Click the Cancel button or X button to close the modal")
+    #         time.sleep(1)
 
-            logger.info("Modal closed")
-            return True
+    #         logger.info("Modal closed")
+    #         return True
 
-        except Exception as e:
-            logger.error(f"Close modal failed: {str(e)}")
-            return False
+    #     except Exception as e:
+    #         logger.error(f"Close modal failed: {str(e)}")
+    #         return False

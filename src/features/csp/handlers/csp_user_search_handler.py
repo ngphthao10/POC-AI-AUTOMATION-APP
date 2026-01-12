@@ -51,8 +51,11 @@ class CSPUserSearchHandler:
             time.sleep(2)  # Quick wait for search results
 
             # Open edit form (Nova Act)
-            self.nova.act("In the results table, click the first row's Actions dropdown and select Edit")
-            time.sleep(3)  # Wait for edit form to load
+            # self.nova.act("In the results table, click the first row's Actions dropdown and select Edit")
+            self.nova.act("In the results table, click the first row's Actions dropdown")
+            time.sleep(1)
+            self.nova.act("In the dropdown menu, click Edit")
+            time.sleep(2)  # Wait for edit form to load
 
             logger.info(f"Edit form opened successfully for {target_user}")
             print(f"✅ Edit form opened for {target_user}")

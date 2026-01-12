@@ -54,3 +54,4 @@ backup*/
 workflow_states
 .env
 
+parallel_handler

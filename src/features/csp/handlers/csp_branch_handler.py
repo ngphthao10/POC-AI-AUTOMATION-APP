@@ -17,6 +17,7 @@ class CSPBranchHandler:
     def __init__(self, nova: NovaAct):
         self.nova = nova
         self.page = nova.page
+        self.has_changes = False  # Track if any changes were made
 
     def change_branch_hierarchical(self, branch_hierarchy: List[str]) -> bool:
         try:
@@ -30,8 +31,23 @@ class CSPBranchHandler:
             logger.info(f"Changing branch to: {bank} -> {region} -> {branch}")
 
             # Ensure on Roles tab
-            self.nova.act("Click the 'Roles' tab in the Edit user modal")
+            # Use Playwright for simple tab click (much faster than NovaAct)
+            roles_tab = self.page.locator("text='Roles'").first
+            roles_tab.click()
             time.sleep(1)
+
+            # Check if branch is already correct
+            logger.debug(f"Checking if branch is already set to: {branch}")
+            print(f"  ➤ Checking current branch...")
+            result = self.nova.act_get(
+                f"Look at the Scope field in the FIRST row. Does it already show the path with '{branch}' (like '... / {region} / {branch}' or similar)?",
+                schema=BOOL_SCHEMA
+            )
+            if result.parsed_response:
+                logger.info(f"Branch already set to: {branch}. Skipping update.")
+                print(f"  ✓ Branch already set to: {branch}. No changes needed.")
+                self.has_changes = False  # No changes made
+                return True
 
             # Step 1: Change Bank User
             self._change_bank_user(bank, region, branch)
@@ -41,6 +57,7 @@ class CSPBranchHandler:
 
             logger.info(f"Branch changed successfully to: {branch}")
             print(f"✅ Branch changed successfully to: {branch}")
+            self.has_changes = True  # Changes were made
             return True
 
         except Exception as e:

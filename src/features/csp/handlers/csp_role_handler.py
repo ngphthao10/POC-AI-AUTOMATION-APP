@@ -16,6 +16,7 @@ class CSPRoleHandler:
     def __init__(self, nova: NovaAct):
         self.nova = nova
         self.page = nova.page
+        self.has_changes = False  # Track if any changes were made
 
     def change_role(self, new_role: str) -> bool:
         try:
@@ -25,8 +26,10 @@ class CSPRoleHandler:
             # Step 0: Navigate to Roles tab
             logger.debug("Step 0: Navigating to Roles tab")
             print("  ➤ Navigating to Roles tab...")
-            self.nova.act("Click the 'Roles' tab in the Edit user modal")
-            time.sleep(2)
+            # Use Playwright for simple tab click (much faster than NovaAct)
+            roles_tab = self.page.locator("text='Roles'").first
+            roles_tab.click()
+            time.sleep(1)
 
             # Check if role is already correct
             logger.debug(f"Checking if role is already set to: {new_role}")
@@ -38,6 +41,7 @@ class CSPRoleHandler:
             if result.parsed_response:
                 logger.info(f"Role already set to: {new_role}. Skipping update.")
                 print(f"  ✓ Role already set to: {new_role}. No changes needed.")
+                self.has_changes = False  # No changes made
                 return True
 
             # Step 1: Open role dropdown
@@ -87,6 +91,7 @@ class CSPRoleHandler:
 
             logger.info(f"Role updated successfully to: {new_role}")
             print(f"✅ Role updated to: {new_role}")
+            self.has_changes = True  # Changes were made
             return True
 
         except Exception as e:

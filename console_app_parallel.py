@@ -64,21 +64,21 @@ def load_and_display_config(input_path):
         return False
 
 
-def run_automation(input_path):
-    """Run the automation"""
+def run_automation_parallel(input_path, max_workers=3):
+    """Run the parallel automation"""
     try:
         print("\n" + "=" * 60)
-        print("🚀 Starting automation...")
+        print(f"🚀 Starting PARALLEL automation (max {max_workers} workers)...")
         print("=" * 60)
 
-        from src.features.csp.csp_admin import main as csp_main
-        success = csp_main(input_file=input_path)
+        from src.features.csp.csp_admin_parallel import main as csp_parallel_main
+        success = csp_parallel_main(input_file=input_path, max_workers=max_workers)
 
         print("\n" + "=" * 60)
         if success:
-            print("✅ Automation completed successfully!")
+            print("✅ Parallel automation completed successfully!")
         else:
-            print("⚠️  Automation completed with some errors")
+            print("⚠️  Parallel automation completed with some errors")
         print("=" * 60)
         return success
 
@@ -99,6 +99,7 @@ def show_menu():
     print("=" * 60)
     print("  [r] Run automation again")
     print("  [l] Reload input.json and run")
+    print("  [w] Change max workers")
     print("  [q] Quit")
     print("=" * 60)
 
@@ -106,8 +107,10 @@ def show_menu():
 def main():
     """Main function - runs continuously"""
     print("=" * 60)
-    print("🚀 CSP ADMIN AUTOMATION - CONTINUOUS MODE")
+    print("🚀 CSP ADMIN AUTOMATION - PARALLEL MODE")
     print("=" * 60)
+    print("💡 Process multiple users concurrently (default: 3 workers)")
+    print("💡 App will keep running until you choose to quit")
 
     input_path = get_input_file_path()
 
@@ -123,13 +126,31 @@ def main():
         input("\nPress Enter to exit...")
         return
 
+    # Default max workers
+    max_workers = 3
+
     # Main loop
     first_run = True
     while True:
         try:
             if first_run:
-                # First run - ask for confirmation
-                print(f"\n⚠️  This will run browser automation")
+                # First run - ask for confirmation and max workers
+                print(f"\n⚠️  This will run browser automation in PARALLEL mode")
+                print(f"💡 Current max workers: {max_workers}")
+
+                # Ask if want to change max workers
+                change_workers = input("Change max workers? (y/N): ").strip().lower()
+                if change_workers == 'y':
+                    try:
+                        new_workers = int(input(f"Enter max workers (1-10, current: {max_workers}): ").strip())
+                        if 1 <= new_workers <= 10:
+                            max_workers = new_workers
+                            print(f"✅ Max workers set to: {max_workers}")
+                        else:
+                            print("⚠️  Invalid value. Using default: 3")
+                    except ValueError:
+                        print("⚠️  Invalid input. Using default: 3")
+
                 confirm = input("Start? (y/N): ").strip().lower()
 
                 if confirm not in ['y', 'yes']:
@@ -139,7 +160,7 @@ def main():
                 first_run = False
 
             # Run automation
-            run_automation(input_path)
+            run_automation_parallel(input_path, max_workers)
 
             # Show menu and get user choice
             while True:
@@ -148,7 +169,7 @@ def main():
 
                 if choice == 'r':
                     # Run again
-                    print("\n🔄 Running again with same config...")
+                    print(f"\n🔄 Running again with same config (max workers: {max_workers})...")
                     break
                 elif choice == 'l':
                     # Reload config
@@ -159,12 +180,24 @@ def main():
                     else:
                         print("❌ Failed to reload config. Using previous config.")
                         continue
+                elif choice == 'w':
+                    # Change max workers
+                    try:
+                        new_workers = int(input(f"Enter max workers (1-10, current: {max_workers}): ").strip())
+                        if 1 <= new_workers <= 10:
+                            max_workers = new_workers
+                            print(f"✅ Max workers set to: {max_workers}")
+                        else:
+                            print("⚠️  Invalid value. Must be between 1-10")
+                    except ValueError:
+                        print("⚠️  Invalid input. Must be a number")
+                    continue
                 elif choice == 'q':
                     # Quit
                     print("\n👋 Exiting...")
                     return
                 else:
-                    print("❌ Invalid choice. Please enter 'r', 'l', or 'q'")
+                    print("❌ Invalid choice. Please enter 'r', 'l', 'w', or 'q'")
                     continue
 
         except KeyboardInterrupt:

@@ -41,6 +41,7 @@ def process_user(
     print(f"{'='*60}")
 
     result = {'success': False}
+    has_changes = False  # Track if any changes were made
 
     try:
         # Step 1: Login
@@ -69,7 +70,7 @@ def process_user(
             return result
 
         # Screenshot after opening edit
-        if screenshot_manager:  
+        if screenshot_manager:
             screenshot_manager.capture(nova, step_name="edit_form_opened")
 
         # Step 3: Change role (optional)
@@ -84,6 +85,9 @@ def process_user(
             if not success:
                 result['failed_steps'].append("change_role")
                 return result
+            # Track changes
+            if role_handler.has_changes:
+                has_changes = True
 
         # Step 4: Change branch (optional)
         if branch_hierarchy:
@@ -97,25 +101,32 @@ def process_user(
             if not success:
                 result['failed_steps'].append("change_branch")
                 return result
+            # Track changes
+            if branch_handler.has_changes:
+                has_changes = True
 
-        # Screenshot before save
-        if screenshot_manager:
-            screenshot_manager.capture(nova, step_name="before_save")
+        # Step 5: Save changes only if there were changes
+        if has_changes:
+            # Screenshot before save
+            if screenshot_manager:
+                screenshot_manager.capture(nova, step_name="before_save")
 
-        # Step 5: Save changes 
-        save_handler = CSPSaveHandler(nova)
-        success = wrapper.execute_with_retry(
-            step_name="save_changes",
-            handler_func=save_handler.save_changes,
-            max_retries=3
-        )
-        if not success:
-            result['failed_steps'].append("save_changes")
-            return result
+            save_handler = CSPSaveHandler(nova)
+            success = wrapper.execute_with_retry(
+                step_name="save_changes",
+                handler_func=save_handler.save_changes,
+                max_retries=3
+            )
+            if not success:
+                result['failed_steps'].append("save_changes")
+                return result
 
-        # Screenshot after save
-        if screenshot_manager:
-            screenshot_manager.capture(nova, step_name="after_save")
+            # Screenshot after save
+            if screenshot_manager:
+                screenshot_manager.capture(nova, step_name="after_save")
+        else:
+            logger.info("No changes detected. Skipping save.")
+            print("\nℹ️  No changes detected. Skipping save.")
 
         # Success
         result['success'] = True

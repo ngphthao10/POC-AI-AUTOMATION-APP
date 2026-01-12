@@ -11,14 +11,14 @@
       "branch_hierarchy": ["VIB Bank", "South", "412"]
     },
     {
-      "target_user": "hang.maithuy2",
-      "new_role": "Base",
-      "branch_hierarchy": null
+      "target_user": "hang.lebich",
+      "new_role": "CSP_Inquiry",
+      "branch_hierarchy": ["VIB Bank", "North", "002"]
     },
     {
-      "target_user": "anh.vutu",
-      "new_role": null,
-      "branch_hierarchy": ["VIB Bank", "North", "405"]
+      "target_user": "hang.maithuy2",
+      "new_role": "Limits",
+      "branch_hierarchy": null
     }
   ]
 }
